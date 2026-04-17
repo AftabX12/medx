@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medx-postgres
+    environment:
+      POSTGRES_USER: medx
+      POSTGRES_PASSWORD: medx
+      POSTGRES_DB: medx
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medx -d medx"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

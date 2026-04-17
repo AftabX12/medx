@@ -1,0 +1,13 @@
+{% if status == "pending" %}
+  <span class="text-amber-700 text-xs">· pending</span>
+{% elif status == "ok" %}
+  <span class="text-emerald-700 text-xs">✓ ok</span>
+{% elif status == "failed" %}
+  <span class="text-red-700 text-xs">× failed</span>
+{% elif status == "no_text" %}
+  <span class="text-slate-500 text-xs">· no text</span>
+{% elif status == "unsupported" %}
+  <span class="text-slate-500 text-xs">· unsupported</span>
+{% else %}
+  <span class="text-slate-500 text-xs">{{ status }}</span>
+{% endif %}

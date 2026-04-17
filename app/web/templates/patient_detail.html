@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.given_name }} {{ patient.family_name }} · MedX{% endblock %}
+{% block content %}
+<div class="mb-2 text-sm text-slate-500">
+  <a href="/patients/ui" class="hover:underline">← All patients</a>
+</div>
+<div class="flex items-baseline justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-semibold">{{ patient.given_name }} {{ patient.family_name }}</h1>
+    <p class="text-sm text-slate-500 font-mono">{{ patient.mrn }}</p>
+  </div>
+  <div class="text-right text-sm text-slate-600">
+    {% if patient.sex %}<span class="mr-3">{{ patient.sex }}</span>{% endif %}
+    {% if patient.date_of_birth %}<span>DOB {{ patient.date_of_birth }}</span>{% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-3 gap-4">
+  <section class="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+    <h2 class="text-sm font-semibold text-slate-600 mb-2">Demographics</h2>
+    {% if patient.demographics %}
+      <dl class="space-y-1 text-sm">
+        {% for k, v in patient.demographics.items() %}
+        <div class="flex justify-between"><dt class="text-slate-500">{{ k }}</dt><dd>{{ v }}</dd></div>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p class="text-sm text-slate-400">No demographics on file.</p>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 col-span-2">
+    <h2 class="text-sm font-semibold text-slate-600 mb-3">Documents</h2>
+    {% include "_documents_panel.html" %}
+  </section>
+
+  <section class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 col-span-3">
+    <h2 class="text-sm font-semibold text-slate-600 mb-2">Timeline</h2>
+    <p class="text-sm text-slate-400">Observations, meds, and problems populate after extraction (Phase 2).</p>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}MedX{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+      <a href="/" class="font-semibold tracking-tight">MedX</a>
+      <nav class="text-sm">
+        {% if current_user %}
+          <span class="text-slate-500 mr-4">{{ current_user.email }}</span>
+          <a href="/dashboard" class="text-slate-700 hover:text-slate-900 mr-4">Dashboard</a>
+          <a href="/patients/ui" class="text-slate-700 hover:text-slate-900 mr-4">Patients</a>
+          <form method="post" action="/logout" class="inline">
+            <button type="submit" class="text-slate-500 hover:text-slate-900">Log out</button>
+          </form>
+        {% else %}
+          <a href="/login" class="text-slate-700 hover:text-slate-900 mr-4">Log in</a>
+          <a href="/register" class="text-slate-700 hover:text-slate-900">Register</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-6 py-8">
+    {% if flash %}
+      <div class="mb-4 px-4 py-2 rounded bg-amber-100 border border-amber-300 text-amber-900 text-sm">
+        {{ flash }}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

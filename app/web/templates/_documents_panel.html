@@ -1,0 +1,63 @@
+<div id="documents-panel" class="space-y-3"
+     {% if has_pending %}hx-get="/patients/ui/{{ patient.id }}/documents"
+     hx-trigger="every 3s"
+     hx-target="#documents-panel"
+     hx-swap="outerHTML"{% endif %}>
+  <form method="post"
+        action="/patients/ui/{{ patient.id }}/documents"
+        enctype="multipart/form-data"
+        hx-encoding="multipart/form-data"
+        hx-post="/patients/ui/{{ patient.id }}/documents"
+        hx-target="#documents-panel"
+        hx-swap="outerHTML"
+        class="border border-dashed border-slate-300 rounded-lg p-4 bg-slate-50/60 flex items-center gap-3">
+    <input type="file" name="file" accept="application/pdf,image/png,image/jpeg" required
+           class="text-sm text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-slate-900 file:text-white file:text-xs file:px-3 file:py-1.5 file:cursor-pointer" />
+    <button type="submit" class="bg-slate-900 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-800">Upload</button>
+    <span class="text-xs text-slate-500">PDF / PNG / JPEG up to 25 MB</span>
+  </form>
+
+  {% if upload_error %}
+    <div class="px-3 py-2 rounded bg-red-50 border border-red-200 text-red-800 text-sm">{{ upload_error }}</div>
+  {% endif %}
+
+  {% if documents %}
+    <div class="bg-white rounded border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-slate-600 text-left text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-3 py-2 font-medium">File</th>
+            <th class="px-3 py-2 font-medium">Type</th>
+            <th class="px-3 py-2 font-medium">OCR</th>
+            <th class="px-3 py-2 font-medium">Uploaded</th>
+            <th class="px-3 py-2 font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for d in documents %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 truncate max-w-xs">{{ d.original_filename or "—" }}</td>
+            <td class="px-3 py-2">
+              {% if d.doc_type %}
+                <span class="inline-block bg-slate-100 text-slate-700 rounded px-2 py-0.5 text-xs">{{ d.doc_type }}</span>
+              {% else %}
+                <span class="text-slate-400 text-xs">—</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">
+              {% with status=d.ocr_status %}{% include "_doc_status_badge.html" %}{% endwith %}
+            </td>
+            <td class="px-3 py-2 text-slate-500 text-xs">{{ d.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td class="px-3 py-2 text-right space-x-2">
+              <a href="/documents/ui/{{ d.id }}" class="text-slate-900 hover:underline text-xs">open</a>
+              <a href="/documents/{{ d.id }}/raw" target="_blank" class="text-slate-500 hover:underline text-xs">raw</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-sm text-slate-400">No documents uploaded yet.</p>
+  {% endif %}
+</div>

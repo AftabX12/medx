@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · MedX{% endblock %}
+{% block content %}
+<div class="flex items-baseline justify-between mb-6">
+  <h1 class="text-xl font-semibold">Dashboard</h1>
+  <a href="/patients/ui/new" class="bg-slate-900 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-800">+ New patient</a>
+</div>
+
+<div class="grid grid-cols-4 gap-3 mb-4">
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500">Patients</p>
+    <p class="text-2xl font-semibold mt-1">{{ patient_count }}</p>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500">Docs extracted</p>
+    <p class="text-2xl font-semibold mt-1 text-emerald-700">{{ status_counts.ok }}</p>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500">Pending</p>
+    <p class="text-2xl font-semibold mt-1 text-amber-700">{{ status_counts.pending }}</p>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <p class="text-xs uppercase tracking-wide text-slate-500">Needs attention</p>
+    <p class="text-2xl font-semibold mt-1 {% if needs_attention_count %}text-red-700{% else %}text-slate-400{% endif %}">{{ needs_attention_count }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-4">
+  <section class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <header class="bg-slate-50 border-b border-slate-200 px-3 py-2 text-xs uppercase tracking-wide text-slate-600">Recent uploads</header>
+    {% if recent %}
+      <table class="w-full text-sm">
+        <thead class="text-slate-500 text-xs text-left">
+          <tr><th class="px-3 py-2 font-medium">File</th><th class="px-3 py-2 font-medium">Patient</th><th class="px-3 py-2 font-medium">Status</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for doc, patient in recent %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 truncate max-w-xs"><a href="/documents/ui/{{ doc.id }}" class="text-slate-900 hover:underline">{{ doc.original_filename or "—" }}</a></td>
+            <td class="px-3 py-2"><a href="/patients/ui/{{ patient.id }}" class="text-slate-700 hover:underline">{{ patient.given_name }} {{ patient.family_name }}</a></td>
+            <td class="px-3 py-2">{% with status=doc.ocr_status %}{% include "_doc_status_badge.html" %}{% endwith %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="p-4 text-sm text-slate-400">No uploads yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <header class="bg-slate-50 border-b border-slate-200 px-3 py-2 text-xs uppercase tracking-wide text-slate-600">Needs attention</header>
+    {% if needs_attention %}
+      <ul class="divide-y divide-slate-100 text-sm">
+        {% for doc, patient in needs_attention %}
+        <li class="px-3 py-2 flex items-center justify-between">
+          <div class="min-w-0">
+            <a href="/documents/ui/{{ doc.id }}" class="text-slate-900 hover:underline truncate block">{{ doc.original_filename or "—" }}</a>
+            <span class="text-xs text-slate-500">{{ patient.given_name }} {{ patient.family_name }} · {{ patient.mrn }}</span>
+          </div>
+          {% with status=doc.ocr_status %}{% include "_doc_status_badge.html" %}{% endwith %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="p-4 text-sm text-slate-400">Nothing flagged. Everything extracted cleanly.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="mt-4 bg-white rounded-lg border border-slate-200 p-4 flex items-baseline gap-6">
+  <div>
+    <p class="text-xs uppercase tracking-wide text-slate-500">Storage used</p>
+    <p class="text-lg font-semibold">{{ storage_pretty }}</p>
+  </div>
+  <div>
+    <p class="text-xs uppercase tracking-wide text-slate-500">Files</p>
+    <p class="text-lg font-semibold">{{ file_count }}</p>
+  </div>
+  <p class="text-xs text-slate-400 ml-auto">Local disk · tenant-partitioned</p>
+</section>
+{% endblock %}

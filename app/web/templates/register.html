@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Register · MedX{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+  <h1 class="text-xl font-semibold mb-4">Register a tenant</h1>
+  {% if error %}
+    <div class="mb-3 px-3 py-2 rounded bg-red-50 border border-red-200 text-red-800 text-sm">{{ error }}</div>
+  {% endif %}
+  <form method="post" action="/register" class="space-y-3">
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Tenant name</label>
+      <input name="tenant_name" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Full name</label>
+      <input name="full_name" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Email</label>
+      <input name="email" type="email" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <div>
+      <label class="block text-sm text-slate-600 mb-1">Password</label>
+      <input name="password" type="password" required minlength="8" class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+    </div>
+    <button type="submit" class="w-full bg-slate-900 text-white rounded py-2 text-sm font-medium hover:bg-slate-800">Create tenant</button>
+  </form>
+  <p class="text-xs text-slate-500 mt-4 text-center">
+    Already have an account? <a href="/login" class="text-slate-900 underline">Log in</a>.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ document.original_filename or "Document" }} · MedX{% endblock %}
+{% block content %}
+<div class="mb-2 text-sm text-slate-500">
+  <a href="/patients/ui/{{ document.patient_id }}" class="hover:underline">← Back to patient</a>
+</div>
+
+<div class="flex items-baseline justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-semibold">{{ document.original_filename or "Document" }}</h1>
+    <p class="text-xs text-slate-500 font-mono">{{ document.file_hash[:16] }}…</p>
+  </div>
+  <div class="text-right text-xs text-slate-600 space-x-2">
+    {% if document.doc_type %}
+      <span class="inline-block bg-slate-100 text-slate-700 rounded px-2 py-0.5">{{ document.doc_type }}</span>
+    {% endif %}
+    {% if document.ocr_status == "pending" %}
+      <span class="text-amber-700">· extraction pending</span>
+    {% elif document.ocr_status == "ok" %}
+      <span class="text-emerald-700">✓ extracted</span>
+    {% elif document.ocr_status == "no_text" %}
+      <span class="text-slate-500">· no text found</span>
+    {% elif document.ocr_status == "unsupported" %}
+      <span class="text-slate-500">· OCR not wired for this type</span>
+    {% elif document.ocr_status == "failed" %}
+      <span class="text-red-700">× extraction failed</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-4 h-[calc(100vh-16rem)]">
+  <section class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <header class="bg-slate-50 border-b border-slate-200 px-3 py-2 text-xs uppercase tracking-wide text-slate-600">Original</header>
+    {% if document.mime_type == "application/pdf" %}
+      <iframe src="/documents/{{ document.id }}/raw" class="w-full h-full" title="{{ document.original_filename }}"></iframe>
+    {% elif document.mime_type and document.mime_type.startswith("image/") %}
+      <img src="/documents/{{ document.id }}/raw" alt="{{ document.original_filename }}" class="w-full h-full object-contain" />
+    {% else %}
+      <div class="p-4 text-sm text-slate-500">Preview not available. <a href="/documents/{{ document.id }}/raw" class="text-slate-900 underline" target="_blank">Download</a></div>
+    {% endif %}
+  </section>
+
+  <section class="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col">
+    <header class="bg-slate-50 border-b border-slate-200 px-3 py-2 text-xs uppercase tracking-wide text-slate-600 flex items-center justify-between">
+      <span>Extracted text</span>
+      {% if document.ocr_status == "ok" and document.ocr_text %}
+        <span class="text-slate-500 normal-case">{{ document.ocr_text | length }} chars</span>
+      {% endif %}
+    </header>
+    <div class="flex-1 overflow-auto p-3 text-sm whitespace-pre-wrap font-mono"
+         {% if document.ocr_status == "pending" %}hx-get="/documents/ui/{{ document.id }}/text-partial"
+         hx-trigger="every 3s"
+         hx-swap="innerHTML"{% endif %}>
+      {% if document.ocr_status == "pending" %}
+        <span class="text-amber-700 text-xs">Extraction in progress…</span>
+      {% elif document.ocr_text %}{{ document.ocr_text }}{% else %}
+        <span class="text-slate-400 text-xs">No text extracted.</span>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

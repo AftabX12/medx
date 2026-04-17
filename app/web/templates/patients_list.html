@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Patients · MedX{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Patients</h1>
+  <a href="/patients/ui/new" class="bg-slate-900 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-800">+ New patient</a>
+</div>
+
+{% if patients %}
+<div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-slate-600 text-left">
+      <tr>
+        <th class="px-4 py-2 font-medium">MRN</th>
+        <th class="px-4 py-2 font-medium">Name</th>
+        <th class="px-4 py-2 font-medium">Sex</th>
+        <th class="px-4 py-2 font-medium">DOB</th>
+        <th class="px-4 py-2 font-medium">Created</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in patients %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2 font-mono text-xs">{{ p.mrn }}</td>
+        <td class="px-4 py-2"><a href="/patients/ui/{{ p.id }}" class="text-slate-900 hover:underline">{{ p.given_name }} {{ p.family_name }}</a></td>
+        <td class="px-4 py-2">{{ p.sex or "—" }}</td>
+        <td class="px-4 py-2">{{ p.date_of_birth or "—" }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ p.created_at.strftime("%Y-%m-%d") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white rounded-lg border border-dashed border-slate-300 p-8 text-center text-slate-500">
+  <p>No patients yet.</p>
+  <a href="/patients/ui/new" class="text-slate-900 underline text-sm">Create the first one</a>
+</div>
+{% endif %}
+{% endblock %}
