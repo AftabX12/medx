@@ -549,16 +549,3 @@ Change `AI_PROVIDER=ollama` in `.env` — no code changes needed. All model role
 ### Re-extracting All Documents
 
 Go to `/admin/usage` → click **"↻ Re-extract All Documents"**. This re-queues classify → extract → persist → summarize for every document with completed OCR.
-
----
-
-## Known Issues & Tech Debt
-
-| Issue | Workaround |
-|---|---|
-| `.venv` shebangs stale (point to old mediligence path) | Use `.venv/bin/python -m uvicorn` instead of `uvicorn` directly |
-| In-process queue — jobs lost on restart | Migrate to arq + Redis for persistent queues (Phase 5) |
-| In-process queue lost on restart | Startup recovery re-enqueues `ocr_status=pending` documents |
-| `pipeline_status` JSON column unbounded | No GC yet; old step data accumulates per document |
-| No PHI scrubbing before cloud LLM calls | Phase 4a — do not use real patient data until implemented |
-| Free-tier OpenRouter models drift | If a 404 occurs, check `GET https://openrouter.ai/api/v1/models?supported_parameters=free` |
