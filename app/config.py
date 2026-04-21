@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     queue_backend: str = "inprocess"        # "inprocess" | "arq" (Phase 5)
     queue_max_concurrency: int = 2          # Parallel AI pipeline workers
 
+    # ── Seed admin (created on first startup if absent) ──────────────────────
+    seed_tenant_name: str = "MedX"
+    seed_admin_email: str = "admin@medx.com"
+    seed_admin_password: str = "admin123"
+    seed_admin_name: str = "Admin"
+
 
 @lru_cache
 def get_settings() -> Settings:

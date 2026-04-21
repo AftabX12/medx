@@ -1,6 +1,6 @@
 # MedX — AI-Native Electronic Health Record
 
-MedX is a lightweight, AI-powered EHR system built for cardiology practices. It ingests clinical documents (PDFs, scanned images), extracts structured data using LLMs, reconciles that data against the patient record, and surfaces everything through a clinician-facing web UI and a patient self-service portal.
+MedX is a lightweight, AI-powered EHR system for general medical use. It ingests clinical documents (PDFs, scanned images), extracts structured data using LLMs, reconciles that data against the patient record, and surfaces everything through a clinician-facing web UI and a patient self-service portal.
 
 > **Status:** R&D / internal MVP. Synthetic data only. HIPAA boundary work (PHI scrubbing before cloud LLM calls) is deferred to Phase 4a.
 
@@ -72,7 +72,8 @@ PostgreSQL (SQLAlchemy async ORM)         In-Process Queue (asyncio)
                                            │
                                     AI Pipeline (app/ai/agents/)
                                      ├── classify_document
-                                     ├── extract_{lab|imaging|discharge|meds|hp}
+                                     ├── extract_document       ← unified (known types)
+                                     ├── plan_and_extract       ← dynamic (unknown types)
                                      ├── persist_extraction
                                      ├── reconcile_patient_profile
                                      └── summarize_patient
@@ -143,11 +144,8 @@ medx/
 │   │   └── agents/
 │   │       ├── router.py        # Pipeline orchestrator (classify→extract→persist→…)
 │   │       ├── classify.py      # Document type classification
-│   │       ├── extract_hp.py    # History & Physical extraction
-│   │       ├── extract_lab.py   # Lab panel extraction
-│   │       ├── extract_imaging.py
-│   │       ├── extract_discharge.py
-│   │       ├── extract_meds.py
+│   │       ├── extract.py       # Unified extractor — all known doc types (_CONFIGS dict)
+│   │       ├── plan_extract.py  # Dynamic 2-step extractor for unknown doc types
 │   │       ├── extract_patient_info.py  # Patient demographics from document text
 │   │       ├── persist.py       # Write extracted data to clinical tables
 │   │       ├── profile_reconcile.py     # Auto-fill + conflict detection
@@ -203,10 +201,10 @@ medx/
 │           └── ...
 │
 ├── alembic/                     # Database migrations
-├── tests/                       # pytest test suite
+├── scripts/
+│   └── create_admin.py          # CLI to create admin user + tenant
 ├── .env.example                 # Environment variable template
-├── pyproject.toml               # Project metadata + dependencies
-└── medilingence.md              # Living PRD / implementation plan
+└── pyproject.toml               # Project metadata + dependencies
 ```
 
 ---
@@ -332,7 +330,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 `/login` redirects to `/doctor/login` by default.
 
-### Creating the First Account
+### Creating the First Admin Account
+
+```bash
+docker exec -it medx-app python -m scripts.create_admin
+```
+
+Prompts for tenant name, email, full name, and password. Creates the tenant if it doesn't exist.
+
+### Creating a Doctor Account
 
 ```
 GET /register  →  creates a new tenant + doctor account
@@ -395,7 +401,7 @@ Upload
 | `discharge_summary` | diagnoses, medications, observations, dates |
 | `med_list` | medications (name, dose, frequency, route, status) |
 | `history_physical` | vitals, problems, medications, allergies, chief_complaint, assessment, plan |
-| `other` | classify + profile only; no extraction |
+| `other` / unknown | dynamic plan+extract — LLM self-generates extraction prompt; stored as JSONB |
 
 ### Reconciliation Severity
 
@@ -518,20 +524,16 @@ alembic current
 
 ## Development Guide
 
-### Running Tests
-
-```bash
-pytest tests/ -v
-```
-
 ### Adding a New Document Type
+
+Unknown document types are handled automatically by the dynamic fallback extractor (`plan_extract.py`) — no code changes needed. To promote a frequently-seen type to a first-class clinical type with typed DB rows:
 
 1. Add value to `DocType` enum in `app/ai/agents/doctype.py`
 2. Create JSON schema in `app/ai/schemas/{type}.schema.json`
-3. Create extractor in `app/ai/agents/extract_{type}.py`
-4. Register in `_EXTRACTORS` dict in `app/ai/agents/router.py`
-5. Add `_persist_{type}` function in `app/ai/agents/persist.py`
-6. Add rendering block in `app/web/templates/document_viewer.html`
+3. Add entry to `_CONFIGS` dict in `app/ai/agents/extract.py` (system prompt + schema name)
+4. Add `_persist_{type}` function in `app/ai/agents/persist.py` and wire it into `persist_extraction`
+5. Add rendering block in `app/web/templates/document_viewer.html`
+6. Add schema name to `_DOC_TYPE_TO_SCHEMA` in `app/validation/extraction.py`
 7. Update `app/ai/schemas/classify.schema.json` doc_type enum
 
 ### Adding a New LLM Role
