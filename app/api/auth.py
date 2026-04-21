@@ -1,3 +1,4 @@
+"""Auth REST API — tenant registration and JWT login for doctor/admin accounts."""
 from fastapi import APIRouter, HTTPException, status
 
 from app.db.models import User
@@ -24,7 +25,7 @@ async def register(body: RegisterRequest, session: SessionDep) -> TokenResponse:
         email=body.email.lower(),
         full_name=body.full_name,
         password_hash=hash_password(body.password),
-        role="admin",
+        role="doctor",
     )
     session.add(user)
     await session.flush()

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Activity Log · MedX{% endblock %}
+{% block content %}
+<div class="flex items-start justify-between mb-6 gap-4">
+  <div>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">Activity Log</h1>
+    <p class="text-xs text-slate-400 dark:text-gray-500 mt-0.5">All mutating actions by authenticated users · tenant-scoped</p>
+  </div>
+</div>
+
+<form method="get" action="/activity" class="mb-4 flex items-center gap-3">
+  <select name="action_filter" onchange="this.form.submit()"
+          class="rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2 text-sm text-slate-700 dark:text-gray-200 outline-none focus:border-blue-400 dark:focus:border-blue-500 transition-colors">
+    <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
+    {% for at in action_types %}
+    <option value="{{ at }}" {% if action_filter == at %}selected{% endif %}>{{ at }}</option>
+    {% endfor %}
+  </select>
+  {% if action_filter %}
+  <a href="/activity" class="text-xs text-slate-500 dark:text-gray-400 hover:underline">Clear filter</a>
+  {% endif %}
+</form>
+
+{% if entries %}
+<div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-100 dark:border-gray-800 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 text-left">
+        <th class="px-4 py-3">Time</th>
+        <th class="px-4 py-3">Action</th>
+        <th class="px-4 py-3">Resource</th>
+        <th class="px-4 py-3">Path</th>
+        <th class="px-4 py-3 text-right">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+      {% for entry in entries %}
+      <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+        <td class="px-4 py-2.5 text-slate-500 dark:text-gray-400 text-xs whitespace-nowrap font-mono">
+          {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}
+        </td>
+        <td class="px-4 py-2.5">
+          <span class="inline-block px-2 py-0.5 rounded-lg text-xs font-medium
+            {% if entry.action in ('delete', 'post') and entry.method == 'DELETE' %}bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300
+            {% elif entry.action in ('login', 'register') %}bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300
+            {% elif entry.action in ('put', 'patch', 'post') %}bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300
+            {% else %}bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400{% endif %}">
+            {{ entry.action }}
+          </span>
+        </td>
+        <td class="px-4 py-2.5 text-slate-700 dark:text-gray-300 text-xs">
+          {{ entry.resource_type }}{% if entry.resource_id %} <span class="text-slate-400 dark:text-gray-500 font-mono">{{ entry.resource_id[:12] }}…</span>{% endif %}
+        </td>
+        <td class="px-4 py-2.5 text-slate-400 dark:text-gray-500 text-xs font-mono truncate max-w-[200px]" title="{{ entry.path or '' }}">
+          {{ entry.path or '—' }}
+        </td>
+        <td class="px-4 py-2.5 text-right">
+          {% if entry.status_code %}
+          <span class="text-xs font-mono
+            {% if entry.status_code < 300 %}text-emerald-600 dark:text-emerald-400
+            {% elif entry.status_code < 400 %}text-amber-600 dark:text-amber-400
+            {% else %}text-red-600 dark:text-red-400{% endif %}">
+            {{ entry.status_code }}
+          </span>
+          {% else %}
+          <span class="text-xs text-slate-300 dark:text-gray-600">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-4 flex items-center gap-4 text-sm">
+  {% if page > 1 %}
+  <a href="/activity?page={{ page - 1 }}{% if action_filter %}&action_filter={{ action_filter }}{% endif %}"
+     class="text-slate-600 dark:text-gray-300 hover:underline">← Previous</a>
+  {% endif %}
+  <span class="text-slate-400 dark:text-gray-500">Page {{ page }}</span>
+  {% if has_next %}
+  <a href="/activity?page={{ page + 1 }}{% if action_filter %}&action_filter={{ action_filter }}{% endif %}"
+     class="text-slate-600 dark:text-gray-300 hover:underline">Next →</a>
+  {% endif %}
+</div>
+
+{% else %}
+<div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-10 text-center text-slate-400 dark:text-gray-500 text-sm">
+  No activity recorded yet.
+</div>
+{% endif %}
+{% endblock %}

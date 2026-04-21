@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+{% block title %}Patient Portal · Sign In · MedX{% endblock %}
+{% block content %}
+<div class="min-h-[calc(100vh-72px)] flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-slate-200 dark:border-gray-800 p-8">
+
+      <div class="mb-7">
+        <div class="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 text-xs font-semibold">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          Patient Portal
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
+        <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">Sign in to access your health records</p>
+      </div>
+
+      {% if error %}
+        <div class="mb-5 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+          <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/patient/login" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Email address</label>
+          <input type="email" name="email" required autocomplete="email" placeholder="you@email.com"
+                 class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Password</label>
+          <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"
+                 class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors" />
+        </div>
+        <button type="submit"
+                class="w-full mt-2 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm transition-colors">
+          Sign in
+        </button>
+      </form>
+
+      <p class="text-xs text-slate-500 dark:text-gray-500 mt-5 text-center">
+        Don't have an account?
+        <a href="/patient/register" class="text-sky-600 dark:text-sky-400 hover:underline font-medium">Sign up</a>
+      </p>
+
+      <div class="mt-4 pt-4 border-t border-slate-100 dark:border-gray-800 text-center">
+        <a href="/doctor/login" class="text-xs text-slate-400 dark:text-gray-600 hover:text-slate-600 dark:hover:text-gray-400 transition-colors">
+          Clinician login →
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

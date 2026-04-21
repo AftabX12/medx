@@ -1,3 +1,13 @@
+"""Clinical data models: Observation, Medication, Problem, Allergy, Encounter.
+
+Every row is scoped to a (tenant_id, patient_id) pair. Rows are never deleted
+by the extraction pipeline — new extractions append rows and raise ReconcileFlags
+for duplicates/conflicts instead. Deletions only happen via explicit API calls.
+
+source_document_id is SET NULL (not CASCADE) so that deleting a document
+doesn't silently remove the patient's clinical history.
+"""
+
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -9,6 +19,7 @@ from app.db.base import Base, PrimaryKeyMixin, TimestampMixin
 
 
 def _tenant_fk() -> Mapped[uuid.UUID]:
+    """Reusable tenant_id foreign key with CASCADE delete."""
     return mapped_column(
         Uuid,
         ForeignKey("tenants.id", ondelete="CASCADE"),
@@ -18,6 +29,7 @@ def _tenant_fk() -> Mapped[uuid.UUID]:
 
 
 def _patient_fk() -> Mapped[uuid.UUID]:
+    """Reusable patient_id foreign key with CASCADE delete."""
     return mapped_column(
         Uuid,
         ForeignKey("patients.id", ondelete="CASCADE"),
@@ -27,6 +39,16 @@ def _patient_fk() -> Mapped[uuid.UUID]:
 
 
 class Observation(Base, PrimaryKeyMixin, TimestampMixin):
+    """A single lab result or vital-sign measurement.
+
+    Numeric values are stored in value_numeric (Decimal) for precise comparison
+    and range queries. Free-text results (e.g. "positive") go in value_text.
+    Only one of the two should be populated for a given row.
+
+    loinc_code is a best-effort hint from the LLM; it is not validated against
+    the full LOINC database.
+    """
+
     __tablename__ = "observations"
 
     tenant_id: Mapped[uuid.UUID] = _tenant_fk()
@@ -44,6 +66,15 @@ class Observation(Base, PrimaryKeyMixin, TimestampMixin):
 
 
 class Medication(Base, PrimaryKeyMixin, TimestampMixin):
+    """A medication entry for a patient.
+
+    status values: "active" | "discontinued" | "historical" | "planned"
+    rxnorm_code is a best-effort hint from the LLM.
+
+    Duplicate detection in the persistence layer compares (name, dose, frequency)
+    and raises a ReconcileFlag rather than overwriting the existing row.
+    """
+
     __tablename__ = "medications"
 
     tenant_id: Mapped[uuid.UUID] = _tenant_fk()
@@ -63,6 +94,15 @@ class Medication(Base, PrimaryKeyMixin, TimestampMixin):
 
 
 class Problem(Base, PrimaryKeyMixin, TimestampMixin):
+    """A diagnosis or clinical problem on the patient's problem list.
+
+    status values: "active" | "resolved" | "historical"
+    icd10_code is a best-effort hint from the LLM.
+
+    Duplicate detection matches by label (case-insensitive in the repository)
+    and raises a ReconcileFlag rather than creating a second row.
+    """
+
     __tablename__ = "problems"
 
     tenant_id: Mapped[uuid.UUID] = _tenant_fk()
@@ -79,6 +119,12 @@ class Problem(Base, PrimaryKeyMixin, TimestampMixin):
 
 
 class Allergy(Base, PrimaryKeyMixin, TimestampMixin):
+    """A known allergy or adverse reaction for a patient.
+
+    severity values: "mild" | "moderate" | "severe" (free-text from LLM).
+    Duplicate detection matches by substance name; duplicates become ReconcileFlags.
+    """
+
     __tablename__ = "allergies"
 
     tenant_id: Mapped[uuid.UUID] = _tenant_fk()
@@ -93,6 +139,12 @@ class Allergy(Base, PrimaryKeyMixin, TimestampMixin):
 
 
 class Encounter(Base, PrimaryKeyMixin, TimestampMixin):
+    """A clinical encounter (visit note) authored by a provider.
+
+    Distinct from Appointment (patient-requested visit) — Encounter is the
+    clinician-authored note after the visit has occurred.
+    """
+
     __tablename__ = "encounters"
 
     tenant_id: Mapped[uuid.UUID] = _tenant_fk()

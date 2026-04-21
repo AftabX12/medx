@@ -1,0 +1,59 @@
+{% extends "portal/base.html" %}
+{% block title %}Messages · MedX{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">Messages</h1>
+    <p class="text-sm text-slate-400 dark:text-gray-500 mt-0.5">Conversation with your care team</p>
+  </div>
+</div>
+
+<!-- Message thread -->
+<div class="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl overflow-hidden mb-3" style="min-height:400px">
+  <div class="flex flex-col gap-3 p-5" id="message-thread">
+    {% if messages %}
+      {% for msg in messages %}
+      <div class="flex {% if msg.direction == 'patient_to_doctor' %}justify-end{% else %}justify-start{% endif %}">
+        <div class="max-w-[70%]">
+          <div class="px-4 py-2.5 rounded-2xl text-sm
+            {% if msg.direction == 'patient_to_doctor' %}
+              bg-sky-600 text-white rounded-br-sm
+            {% else %}
+              bg-slate-100 dark:bg-gray-800 text-slate-800 dark:text-gray-200 rounded-bl-sm
+            {% endif %}">
+            {{ msg.body }}
+          </div>
+          <div class="text-xs text-slate-400 dark:text-gray-500 mt-1 {% if msg.direction == 'patient_to_doctor' %}text-right{% endif %}">
+            {% if msg.direction == 'patient_to_doctor' %}You{% else %}Care Team{% endif %}
+            · {{ msg.created_at.strftime('%b %d, %H:%M') }}
+            {% if msg.direction == 'doctor_to_patient' and msg.read_at %}
+              <span class="text-emerald-500 dark:text-emerald-400">· Read</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="flex-1 flex items-center justify-center text-slate-400 dark:text-gray-500 text-sm py-16 text-center">
+        No messages yet.<br>Send a message to your care team below.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Compose -->
+<form method="post" action="/portal/messages" class="flex gap-3">
+  <textarea name="body" rows="2" required placeholder="Type your message…"
+            class="flex-1 rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors resize-none"></textarea>
+  <button type="submit"
+          class="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold self-end transition-colors">
+    Send
+  </button>
+</form>
+
+<script>
+document.getElementById('message-thread').scrollTop = 9999;
+</script>
+
+{% endblock %}

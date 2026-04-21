@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Admin · MedX{% endblock %}
+{% block content %}
+<div class="flex items-start justify-between mb-6 gap-4">
+  <div>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">Platform Admin</h1>
+    <p class="text-xs text-slate-400 dark:text-gray-500 mt-0.5">{{ current_user.email }}</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <a href="/admin/usage" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium">Token usage</a>
+    <a href="/activity" class="text-sm text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 transition-colors">Activity log</a>
+    <form method="post" action="/admin/logout" class="inline">
+      <button type="submit" class="text-sm text-slate-400 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-200 transition-colors">Log out</button>
+    </form>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-3 gap-4 mb-8">
+  <div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-5 text-center">
+    <p class="text-3xl font-bold text-slate-800 dark:text-white">{{ tenants | length }}</p>
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 mt-1.5">Tenants</p>
+  </div>
+  <div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-5 text-center">
+    <p class="text-3xl font-bold text-slate-800 dark:text-white">{{ users | length }}</p>
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 mt-1.5">Users</p>
+  </div>
+  <div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 p-5 text-center">
+    <p class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{{ "{:,}".format(total_tokens | int) }}</p>
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 mt-1.5">Total Tokens</p>
+  </div>
+</div>
+
+<!-- Tenants -->
+<h2 class="text-xs font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-wide mb-3">Tenants</h2>
+{% if tenants %}
+<div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 overflow-hidden mb-8">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-100 dark:border-gray-800 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 text-left">
+        <th class="px-4 py-3">Name</th>
+        <th class="px-4 py-3 text-right">Patients</th>
+        <th class="px-4 py-3">Created</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+      {% for t in tenants %}
+      <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+        <td class="px-4 py-3 font-medium text-slate-800 dark:text-gray-200">{{ t.name }}</td>
+        <td class="px-4 py-3 text-right text-slate-600 dark:text-gray-300">{{ patient_counts.get(t.id, 0) }}</td>
+        <td class="px-4 py-3 text-slate-400 dark:text-gray-500 text-xs font-mono">{{ t.created_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-slate-400 dark:text-gray-500 text-sm mb-8">No tenants yet.</p>
+{% endif %}
+
+<!-- Users -->
+<h2 class="text-xs font-semibold text-slate-400 dark:text-gray-500 uppercase tracking-wide mb-3">Users</h2>
+{% if users %}
+<div class="bg-white dark:bg-gray-900 rounded-2xl border border-slate-200 dark:border-gray-800 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-100 dark:border-gray-800 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 text-left">
+        <th class="px-4 py-3">Email</th>
+        <th class="px-4 py-3">Role</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3">Created</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+      {% for u in users %}
+      <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+        <td class="px-4 py-3 text-slate-800 dark:text-gray-200">{{ u.email }}</td>
+        <td class="px-4 py-3">
+          <span class="inline-block px-2 py-0.5 rounded-lg text-xs font-medium
+            {% if u.role == 'admin' %}bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300
+            {% elif u.role == 'doctor' %}bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300
+            {% elif u.role == 'patient' %}bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300
+            {% else %}bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-400{% endif %}">
+            {{ u.role }}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          {% if u.is_active %}
+            <span class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>active
+            </span>
+          {% else %}
+            <span class="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>inactive
+            </span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-slate-400 dark:text-gray-500 text-xs font-mono">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

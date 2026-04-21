@@ -10,47 +10,55 @@
         hx-post="/patients/ui/{{ patient.id }}/documents"
         hx-target="#documents-panel"
         hx-swap="outerHTML"
-        class="border border-dashed border-slate-300 rounded-lg p-4 bg-slate-50/60 flex items-center gap-3">
+        class="border border-dashed border-slate-200 dark:border-gray-700 rounded-xl p-4 bg-slate-50/60 dark:bg-gray-800/40 flex items-center gap-3 flex-wrap">
     <input type="file" name="file" accept="application/pdf,image/png,image/jpeg" required
-           class="text-sm text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-slate-900 file:text-white file:text-xs file:px-3 file:py-1.5 file:cursor-pointer" />
-    <button type="submit" class="bg-slate-900 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-slate-800">Upload</button>
-    <span class="text-xs text-slate-500">PDF / PNG / JPEG up to 25 MB</span>
+           class="text-sm text-slate-700 dark:text-gray-300
+                  file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 dark:file:bg-gray-700 file:text-white file:text-xs file:px-3 file:py-1.5 file:cursor-pointer file:transition-colors hover:file:bg-slate-700 dark:hover:file:bg-gray-600" />
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-3.5 py-1.5 text-sm font-semibold transition-colors">
+      Upload
+    </button>
+    <span class="text-xs text-slate-400 dark:text-gray-500">PDF / PNG / JPEG · max 25 MB</span>
   </form>
 
   {% if upload_error %}
-    <div class="px-3 py-2 rounded bg-red-50 border border-red-200 text-red-800 text-sm">{{ upload_error }}</div>
+    <div class="px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-sm">{{ upload_error }}</div>
   {% endif %}
 
   {% if documents %}
-    <div class="bg-white rounded border border-slate-200 overflow-hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-800 overflow-hidden">
       <table class="w-full text-sm">
-        <thead class="bg-slate-50 text-slate-600 text-left text-xs uppercase tracking-wide">
-          <tr>
-            <th class="px-3 py-2 font-medium">File</th>
-            <th class="px-3 py-2 font-medium">Type</th>
-            <th class="px-3 py-2 font-medium">OCR</th>
-            <th class="px-3 py-2 font-medium">Uploaded</th>
-            <th class="px-3 py-2 font-medium text-right">Actions</th>
+        <thead>
+          <tr class="border-b border-slate-100 dark:border-gray-800 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 text-left">
+            <th class="px-3 py-2.5">File</th>
+            <th class="px-3 py-2.5">Type</th>
+            <th class="px-3 py-2.5">OCR</th>
+            <th class="px-3 py-2.5">Uploaded</th>
+            <th class="px-3 py-2.5 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
           {% for d in documents %}
-          <tr class="hover:bg-slate-50">
-            <td class="px-3 py-2 truncate max-w-xs">{{ d.original_filename or "—" }}</td>
-            <td class="px-3 py-2">
+          <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+            <td class="px-3 py-2.5 truncate max-w-[160px] text-slate-700 dark:text-gray-200">{{ d.original_filename or "—" }}</td>
+            <td class="px-3 py-2.5">
               {% if d.doc_type %}
-                <span class="inline-block bg-slate-100 text-slate-700 rounded px-2 py-0.5 text-xs">{{ d.doc_type }}</span>
+                <span class="inline-block bg-slate-100 dark:bg-gray-800 text-slate-600 dark:text-gray-300 rounded-md px-2 py-0.5 text-xs">{{ d.doc_type }}</span>
               {% else %}
-                <span class="text-slate-400 text-xs">—</span>
+                <span class="text-slate-300 dark:text-gray-600 text-xs">—</span>
               {% endif %}
             </td>
-            <td class="px-3 py-2">
+            <td class="px-3 py-2.5">
               {% with status=d.ocr_status %}{% include "_doc_status_badge.html" %}{% endwith %}
             </td>
-            <td class="px-3 py-2 text-slate-500 text-xs">{{ d.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
-            <td class="px-3 py-2 text-right space-x-2">
-              <a href="/documents/ui/{{ d.id }}" class="text-slate-900 hover:underline text-xs">open</a>
-              <a href="/documents/{{ d.id }}/raw" target="_blank" class="text-slate-500 hover:underline text-xs">raw</a>
+            <td class="px-3 py-2.5 text-slate-400 dark:text-gray-500 text-xs">{{ d.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td class="px-3 py-2.5 text-right space-x-3">
+              <a href="/documents/ui/{{ d.id }}" class="text-blue-600 dark:text-blue-400 hover:underline text-xs">open</a>
+              <a href="/documents/{{ d.id }}/raw" target="_blank" class="text-slate-500 dark:text-gray-400 hover:underline text-xs">raw</a>
+              <form method="post" action="/documents/ui/{{ d.id }}/delete" class="inline"
+                    onsubmit="return confirm('Delete {{ d.original_filename or 'this document' }}? This cannot be undone.')">
+                <button type="submit" class="text-red-500 dark:text-red-400 hover:underline text-xs">delete</button>
+              </form>
             </td>
           </tr>
           {% endfor %}
@@ -58,6 +66,6 @@
       </table>
     </div>
   {% else %}
-    <p class="text-sm text-slate-400">No documents uploaded yet.</p>
+    <p class="text-sm text-slate-400 dark:text-gray-500">No documents uploaded yet.</p>
   {% endif %}
 </div>

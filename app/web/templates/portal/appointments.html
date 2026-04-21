@@ -1,0 +1,88 @@
+{% extends "portal/base.html" %}
+{% block title %}Appointments · MedX{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900 dark:text-white">Appointments</h1>
+  <p class="text-sm text-slate-400 dark:text-gray-500 mt-0.5">Request and manage visits with your care team</p>
+</div>
+
+<!-- Book new appointment -->
+<div class="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl p-5 mb-6">
+  <p class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-1">Request an Appointment</p>
+  <p class="text-xs text-slate-500 dark:text-gray-400 mb-4">Your care team will confirm after reviewing your request.</p>
+
+  {% if error %}
+    <div class="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+      <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/portal/appointments" class="flex flex-wrap items-end gap-3">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1.5">Preferred date</label>
+      <input type="date" name="scheduled_date" required
+             class="rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors" />
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1.5">Preferred time</label>
+      <input type="time" name="scheduled_time" required
+             class="rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors" />
+    </div>
+    <div class="flex-1 min-w-48">
+      <label class="block text-xs font-medium text-slate-500 dark:text-gray-400 mb-1.5">Reason (optional)</label>
+      <input type="text" name="reason" placeholder="e.g. Follow-up, Annual check-up…"
+             class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-sky-400 dark:focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-950 transition-colors" />
+    </div>
+    <button type="submit"
+            class="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold transition-colors">
+      Request
+    </button>
+  </form>
+</div>
+
+<!-- Appointment list -->
+{% if appointments %}
+<div class="space-y-3">
+  {% for appt in appointments %}
+  <div class="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl px-5 py-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+    <div>
+      <div class="font-semibold text-slate-800 dark:text-gray-200 text-sm">{{ appt.scheduled_at.strftime('%A, %B %d, %Y') }}</div>
+      <div class="text-xs text-slate-500 dark:text-gray-400 mt-0.5">
+        {{ appt.scheduled_at.strftime('%I:%M %p') }}
+        · {{ appt.duration_minutes }} min
+        {% if appt.doctor_id and appt.doctor_id in doctor_names %}
+          · Dr. {{ doctor_names[appt.doctor_id] }}
+        {% endif %}
+      </div>
+      {% if appt.reason %}
+        <div class="text-xs text-slate-600 dark:text-gray-300 mt-1">{{ appt.reason }}</div>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <span class="px-2 py-0.5 rounded-lg text-xs font-medium
+        {% if appt.status == 'confirmed' %}bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300
+        {% elif appt.status == 'pending' %}bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300
+        {% elif appt.status == 'cancelled' %}bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-gray-500 line-through
+        {% elif appt.status == 'completed' %}bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300
+        {% endif %}">
+        {{ appt.status | title }}
+      </span>
+      {% if appt.status in ['pending', 'confirmed'] %}
+      <form method="post" action="/portal/appointments/{{ appt.id }}/cancel"
+            onsubmit="return confirm('Cancel this appointment?')">
+        <button type="submit" class="text-xs text-red-500 dark:text-red-400 hover:underline">Cancel</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white dark:bg-gray-900 border border-dashed border-slate-300 dark:border-gray-700 rounded-2xl p-10 text-center text-slate-400 dark:text-gray-500 text-sm">
+  No appointments yet. Use the form above to request one.
+</div>
+{% endif %}
+
+{% endblock %}

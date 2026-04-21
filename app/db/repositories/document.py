@@ -1,3 +1,4 @@
+"""Document repository — tenant-scoped CRUD plus patient/hash lookups."""
 import uuid
 
 from sqlalchemy import select

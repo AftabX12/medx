@@ -1,14 +1,15 @@
+"""Document REST API — upload, retrieval, SSE pipeline events, and OCR text."""
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.db.models import Document
 from app.db.repositories.document import DocumentRepository
 from app.db.repositories.patient import PatientRepository
 from app.deps import CurrentUser, SessionDep
-from app.ingestion.ocr import process_document
 from app.ingestion.store import get_document_store
+from app.queue import get_queue
 from app.schemas.document import DocumentResponse
 
 router = APIRouter(tags=["documents"])
@@ -31,7 +32,6 @@ async def upload_document(
     patient_id: uuid.UUID,
     session: SessionDep,
     user: CurrentUser,
-    background: BackgroundTasks,
     file: UploadFile = File(...),
     source_type: str = "upload",
 ) -> Document:
@@ -76,7 +76,8 @@ async def upload_document(
     await repo.add(doc)
     await session.commit()
     await session.refresh(doc)
-    background.add_task(process_document, doc.id, user.tenant_id)
+    queue = get_queue()
+    await queue.enqueue("ocr_process", document_id=doc.id, tenant_id=user.tenant_id)
     return doc
 
 

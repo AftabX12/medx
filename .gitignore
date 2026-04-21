@@ -20,4 +20,4 @@ build/
 postgres-data/
 uploads/
 .claude/
-tests/.test-uploads/
+tests/

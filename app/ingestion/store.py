@@ -30,6 +30,10 @@ class DocumentStore(ABC):
     def size(self, *, tenant_id: uuid.UUID, file_key: str) -> int:
         """Return the file size in bytes."""
 
+    @abstractmethod
+    def delete(self, *, tenant_id: uuid.UUID, file_key: str) -> None:
+        """Remove the stored file. No-op if the file does not exist."""
+
 
 class LocalDiskStore(DocumentStore):
     def __init__(self, root: str | Path) -> None:
@@ -56,6 +60,10 @@ class LocalDiskStore(DocumentStore):
 
     def size(self, *, tenant_id: uuid.UUID, file_key: str) -> int:
         return self._path(tenant_id, file_key).stat().st_size
+
+    def delete(self, *, tenant_id: uuid.UUID, file_key: str) -> None:
+        path = self._path(tenant_id, file_key)
+        path.unlink(missing_ok=True)
 
 
 def get_document_store() -> DocumentStore:

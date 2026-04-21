@@ -1,0 +1,14 @@
+.git
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.env
+medx.db
+uploads/
+postgres-data/
+*.egg-info
+.mypy_cache
+.pytest_cache
+.ruff_cache
+tests/

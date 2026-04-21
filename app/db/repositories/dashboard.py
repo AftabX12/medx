@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Document, Patient
+from app.db.models import Document, Patient, ReconcileFlag
 
 
 _NEEDS_ATTENTION = ("failed", "no_text", "unsupported")
@@ -61,6 +61,21 @@ class DashboardRepository:
         )
         result = await self.session.execute(stmt)
         return [(d, p) for d, p in result.all()]
+
+    async def open_flag_count(self) -> int:
+        stmt = select(func.count(ReconcileFlag.id)).where(
+            ReconcileFlag.tenant_id == self.tenant_id,
+            ReconcileFlag.resolved.is_(False),
+        )
+        return int((await self.session.execute(stmt)).scalar_one())
+
+    async def critical_flag_count(self) -> int:
+        stmt = select(func.count(ReconcileFlag.id)).where(
+            ReconcileFlag.tenant_id == self.tenant_id,
+            ReconcileFlag.resolved.is_(False),
+            ReconcileFlag.severity == "critical",
+        )
+        return int((await self.session.execute(stmt)).scalar_one())
 
     def storage_stats(self, root: str | Path) -> tuple[int, int]:
         """Return (total_bytes, file_count) for this tenant's directory.

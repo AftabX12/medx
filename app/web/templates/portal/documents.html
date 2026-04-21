@@ -1,0 +1,90 @@
+{% extends "portal/base.html" %}
+{% block title %}My Documents · MedX{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-slate-900 dark:text-white">My Documents</h1>
+  <p class="text-sm text-slate-400 dark:text-gray-500 mt-0.5">Share reports with your care team</p>
+</div>
+
+<!-- Upload card -->
+<div class="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl p-5 mb-6">
+  <p class="text-sm font-semibold text-slate-700 dark:text-gray-200 mb-1">Upload a Document</p>
+  <p class="text-xs text-slate-500 dark:text-gray-400 mb-4">Share lab reports, imaging results, or referral letters. PDF and images accepted (max 20 MB).</p>
+
+  {% if error %}
+    <div class="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+      <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/portal/documents" enctype="multipart/form-data" class="flex items-center gap-3">
+    <label class="flex-1">
+      <input type="file" name="file" accept=".pdf,image/*" required
+             class="block w-full text-sm text-slate-600 dark:text-gray-300
+                    file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border file:border-slate-200 dark:file:border-gray-700
+                    file:text-xs file:font-medium file:text-slate-700 dark:file:text-gray-200
+                    file:bg-slate-50 dark:file:bg-gray-800 hover:file:bg-slate-100 dark:hover:file:bg-gray-700
+                    file:transition-colors cursor-pointer" />
+    </label>
+    <button type="submit"
+            class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-sm font-semibold shrink-0 transition-colors">
+      Upload
+    </button>
+  </form>
+</div>
+
+<!-- Document list -->
+{% if documents %}
+<div class="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-2xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-100 dark:border-gray-800 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-gray-500 text-left">
+        <th class="px-4 py-3">File</th>
+        <th class="px-4 py-3">Type</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3">Uploaded</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-gray-800">
+      {% for doc in documents %}
+      <tr class="hover:bg-slate-50 dark:hover:bg-gray-800/50 transition-colors">
+        <td class="px-4 py-3 font-medium text-slate-800 dark:text-gray-200">{{ doc.original_filename or doc.file_hash[:12] + '…' }}</td>
+        <td class="px-4 py-3 text-xs">
+          {% if doc.doc_type %}
+            <span class="bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded-md">{{ doc.doc_type | replace('_', ' ') | title }}</span>
+          {% else %}
+            <span class="text-slate-300 dark:text-gray-600">—</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-xs">
+          {% if doc.ocr_status == 'ok' %}
+            <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Processed
+            </span>
+          {% elif doc.ocr_status == 'pending' %}
+            <span class="text-amber-600 dark:text-amber-400 animate-pulse">Processing…</span>
+          {% elif doc.ocr_status == 'failed' %}
+            <span class="text-red-600 dark:text-red-400">Failed</span>
+          {% else %}
+            <span class="text-slate-400 dark:text-gray-500">{{ doc.ocr_status }}</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-slate-400 dark:text-gray-500 text-xs">{{ doc.created_at.strftime('%b %d, %Y') }}</td>
+        <td class="px-4 py-3 text-right">
+          <a href="/documents/ui/{{ doc.id }}" class="text-xs text-sky-600 dark:text-sky-400 hover:underline">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white dark:bg-gray-900 border border-dashed border-slate-300 dark:border-gray-700 rounded-2xl p-10 text-center text-slate-400 dark:text-gray-500 text-sm">
+  No documents uploaded yet. Use the form above to share a document with your care team.
+</div>
+{% endif %}
+
+{% endblock %}

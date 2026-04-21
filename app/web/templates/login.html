@@ -1,28 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Log in · MedX{% endblock %}
+{% block title %}{% if role == 'admin' %}Admin Login{% else %}Doctor Login{% endif %} · MedX{% endblock %}
 {% block content %}
-<div class="max-w-sm mx-auto bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-  <h1 class="text-xl font-semibold mb-4">Log in</h1>
-  {% if error %}
-    <div class="mb-3 px-3 py-2 rounded bg-red-50 border border-red-200 text-red-800 text-sm">{{ error }}</div>
-  {% endif %}
-  <form method="post" action="/login" class="space-y-3">
-    <div>
-      <label class="block text-sm text-slate-600 mb-1">Tenant</label>
-      <input name="tenant_name" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+<div class="min-h-[calc(100vh-120px)] flex items-center justify-center">
+  <div class="w-full max-w-sm">
+
+    <!-- Card -->
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-slate-200 dark:border-gray-800 p-8">
+
+      <!-- Header -->
+      <div class="mb-7">
+        <div class="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold
+                    {% if role == 'admin' %}bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300
+                    {% else %}bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300{% endif %}">
+          {% if role == 'admin' %}
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            Admin Console
+          {% else %}
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            Clinical Portal
+          {% endif %}
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
+        <p class="text-sm text-slate-500 dark:text-gray-400 mt-1">Sign in to your {% if role == 'admin' %}admin{% else %}doctor{% endif %} account</p>
+      </div>
+
+      {% if error %}
+        <div class="mb-5 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+          <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/{{ role or 'doctor' }}/login" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Organisation</label>
+          <input name="tenant_name" required autocomplete="organization"
+                 class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-950 transition-colors"
+                 placeholder="your-practice" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Email address</label>
+          <input name="email" type="email" required autocomplete="email"
+                 class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-950 transition-colors"
+                 placeholder="you@clinic.com" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-1.5">Password</label>
+          <input name="password" type="password" required autocomplete="current-password"
+                 class="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-950 transition-colors"
+                 placeholder="••••••••" />
+        </div>
+        <button type="submit"
+                class="w-full mt-2 py-2.5 rounded-xl font-semibold text-sm text-white transition-colors
+                       {% if role == 'admin' %}bg-indigo-600 hover:bg-indigo-700{% else %}bg-blue-600 hover:bg-blue-700{% endif %}">
+          Sign in
+        </button>
+      </form>
+
+      {% if role == 'doctor' %}
+      <p class="text-xs text-slate-500 dark:text-gray-500 mt-5 text-center">
+        No account? <a href="/register" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">Register a practice</a>
+      </p>
+      {% endif %}
+
+      <div class="mt-5 pt-4 border-t border-slate-100 dark:border-gray-800 flex justify-center gap-5 text-xs text-slate-400 dark:text-gray-600">
+        {% if role != 'doctor' %}<a href="/doctor/login" class="hover:text-slate-700 dark:hover:text-gray-300 transition-colors">Doctor login</a>{% endif %}
+        {% if role != 'admin' %}<a href="/admin/login" class="hover:text-slate-700 dark:hover:text-gray-300 transition-colors">Admin login</a>{% endif %}
+        <a href="/patient/login" class="hover:text-slate-700 dark:hover:text-gray-300 transition-colors">Patient portal</a>
+      </div>
     </div>
-    <div>
-      <label class="block text-sm text-slate-600 mb-1">Email</label>
-      <input name="email" type="email" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-    </div>
-    <div>
-      <label class="block text-sm text-slate-600 mb-1">Password</label>
-      <input name="password" type="password" required class="w-full rounded border border-slate-300 px-3 py-2 text-sm" />
-    </div>
-    <button type="submit" class="w-full bg-slate-900 text-white rounded py-2 text-sm font-medium hover:bg-slate-800">Log in</button>
-  </form>
-  <p class="text-xs text-slate-500 mt-4 text-center">
-    No account? <a href="/register" class="text-slate-900 underline">Register a tenant</a>.
-  </p>
+  </div>
 </div>
 {% endblock %}

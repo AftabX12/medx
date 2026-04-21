@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LabPanel",
+  "type": "object",
+  "required": ["observations"],
+  "properties": {
+    "panel_name": { "type": "string" },
+    "collection_date": { "type": ["string", "null"] },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "value"],
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": ["string", "number", "null"] },
+          "unit": { "type": ["string", "null"] },
+          "reference_range": { "type": ["string", "null"] },
+          "abnormal_flag": { "type": ["string", "null"] },
+          "loinc_hint": { "type": ["string", "null"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

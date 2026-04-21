@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Classification",
+  "type": "object",
+  "required": ["doc_type", "confidence"],
+  "properties": {
+    "doc_type": {
+      "type": "string",
+      "enum": ["lab_panel", "imaging_report", "discharge_summary", "med_list", "history_physical", "other"]
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "rationale": { "type": "string" }
+  }
+}

@@ -1,13 +1,13 @@
 {% if status == "pending" %}
-  <span class="text-amber-700 text-xs">· pending</span>
+  <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 text-xs animate-pulse">· pending</span>
 {% elif status == "ok" %}
-  <span class="text-emerald-700 text-xs">✓ ok</span>
+  <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs">✓ ok</span>
 {% elif status == "failed" %}
-  <span class="text-red-700 text-xs">× failed</span>
+  <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400 text-xs">× failed</span>
 {% elif status == "no_text" %}
-  <span class="text-slate-500 text-xs">· no text</span>
+  <span class="text-slate-400 dark:text-gray-500 text-xs">· no text</span>
 {% elif status == "unsupported" %}
-  <span class="text-slate-500 text-xs">· unsupported</span>
+  <span class="text-slate-400 dark:text-gray-500 text-xs">· unsupported</span>
 {% else %}
-  <span class="text-slate-500 text-xs">{{ status }}</span>
+  <span class="text-slate-400 dark:text-gray-500 text-xs">{{ status }}</span>
 {% endif %}

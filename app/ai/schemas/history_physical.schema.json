@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HistoryPhysical",
+  "type": "object",
+  "required": ["chief_complaint"],
+  "properties": {
+    "visit_date": { "type": ["string", "null"] },
+    "chief_complaint": { "type": "string" },
+    "vital_signs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "value"],
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": ["string", "number", "null"] },
+          "unit": { "type": ["string", "null"] },
+          "loinc_hint": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string" },
+          "status": { "type": ["string", "null"] },
+          "icd10_hint": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "medications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "dose": { "type": ["string", "null"] },
+          "frequency": { "type": ["string", "null"] },
+          "route": { "type": ["string", "null"] },
+          "status": { "type": ["string", "null"] },
+          "rxnorm_hint": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "allergies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["substance"],
+        "properties": {
+          "substance": { "type": "string" },
+          "reaction": { "type": ["string", "null"] },
+          "severity": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "assessment": { "type": ["string", "null"] },
+    "plan": { "type": ["string", "null"] }
+  }
+}

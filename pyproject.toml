@@ -7,7 +7,6 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "sqlalchemy[asyncio]>=2.0.36",
-    "aiosqlite>=0.20",
     "asyncpg>=0.30",
     "alembic>=1.14",
     "pydantic>=2.9",
@@ -19,6 +18,12 @@ dependencies = [
     "structlog>=24.4",
     "jinja2>=3.1",
     "pypdf>=5.1",
+    "openai>=1.55",
+    "tenacity>=9.0",
+    "jsonschema>=4.23",
+    "sse-starlette>=2.1",
+    "pdf2image>=1.17",
+    "Pillow>=10",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +33,11 @@ dev = [
     "httpx>=0.28",
     "ruff>=0.8",
     "mypy>=1.13",
+    "respx>=0.21",
+    "reportlab>=4.0",
+]
+ocr-local = [
+    "marker-pdf>=1.0",
 ]
 
 [build-system]
@@ -40,6 +50,9 @@ include = ["app*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "evals: slow AI evaluation tests; require OPENROUTER_API_KEY and hit the live API",
+]
 
 [tool.ruff]
 line-length = 100
