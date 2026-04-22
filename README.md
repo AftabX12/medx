@@ -1,4 +1,5 @@
 # MedX — AI-Native Electronic Health Record
+<img width="3191" height="978" alt="Gemini_Generated_Image_yjxw0dyjxw0dyjxw (2)" src="https://github.com/user-attachments/assets/11339c5c-45fb-4d17-a293-71fb8820f113" />
 
 MedX is a lightweight, AI-powered EHR system for general medical use. It ingests clinical documents (PDFs, scanned images), extracts structured data using LLMs, reconciles that data against the patient record, and surfaces everything through a clinician-facing web UI and a patient self-service portal.
 
