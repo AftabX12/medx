@@ -103,18 +103,24 @@ class OpenRouterClient:
 
     Provider is selected by settings.ai_provider:
       "openrouter" (default) — uses openrouter_base_url + openrouter_api_key
-      "ollama"               — uses ollama_base_url; gemma4 handles vision OCR too
+      "ollama"               — uses ollama_base_url; all roles use ollama_model
 
-    Both providers expose an OpenAI-compatible chat completions endpoint, so
-    the same SDK and request structure works for both. The only difference is
-    the base URL, API key, and timeout.
-
-    For Ollama, a separate OpenRouter client (_or_client) is kept alive for
-    VISION_OCR calls because most local models don't handle image inputs.
+    OCR vision engines create their own client instances with force_provider so
+    OCR routing is independent of the global AI_PROVIDER setting.
     """
 
-    def __init__(self, settings: Settings | None = None, max_attempts: int = 5) -> None:
-        self._settings = settings or get_settings()
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        max_attempts: int = 5,
+        force_provider: str | None = None,
+        force_model: str | None = None,
+    ) -> None:
+        base = settings or get_settings()
+        # force_provider lets OCR engines override AI_PROVIDER without touching
+        # the global singleton — OCR routing is independent of the AI pipeline.
+        self._settings = base.model_copy(update={"ai_provider": force_provider}) if force_provider else base
+        self._force_model = force_model
         self._max_attempts = max_attempts
         self._is_ollama = self._settings.ai_provider == "ollama"
 
@@ -124,32 +130,18 @@ class OpenRouterClient:
                 base_url=self._settings.ollama_base_url,
                 timeout=self._settings.ollama_timeout_s,
             )
-            # Separate OpenRouter client kept for VISION_OCR calls
-            self._or_client = AsyncOpenAI(
-                api_key=self._settings.openrouter_api_key or "missing",
-                base_url=self._settings.openrouter_base_url,
-                timeout=self._settings.openrouter_timeout_s,
-                default_headers={
-                    "HTTP-Referer": "https://github.com/medx/medx",
-                    "X-Title": self._settings.openrouter_app_title,
-                },
-            )
         else:
             self._client = AsyncOpenAI(
                 api_key=self._settings.openrouter_api_key or "missing",
                 base_url=self._settings.openrouter_base_url,
                 timeout=self._settings.openrouter_timeout_s,
                 default_headers={
-                    "HTTP-Referer": "https://github.com/medx/medx",
                     "X-Title": self._settings.openrouter_app_title,
                 },
             )
-            self._or_client = self._client  # same client for OCR
 
     async def aclose(self) -> None:
         await self._client.close()
-        if self._is_ollama:
-            await self._or_client.close()
 
     async def complete_text(
         self,
@@ -167,7 +159,7 @@ class OpenRouterClient:
         Used for free-text generation (summarization, chat answers).
         Token usage is logged via LLMCallLog if context vars are set.
         """
-        model = resolve_model(role, self._settings)
+        model = self._force_model or resolve_model(role, self._settings)
         underlying = self._client
         messages = self._build_messages(system, user, images)
         resp = await self._call(
@@ -208,8 +200,8 @@ class OpenRouterClient:
         Used for all structured extraction calls where the output must conform
         to a specific JSON schema (classify, extract_*, patient_info).
         """
-        model = resolve_model(role, self._settings)
-        underlying = self._or_client if role == ModelRole.VISION_OCR else self._client
+        model = self._force_model or resolve_model(role, self._settings)
+        underlying = self._client
         # Ollama supports json_object mode; include it for both providers
         system_with_json = system + "\n\nReply with JSON only. Do not include commentary or markdown fences."
         messages = self._build_messages(system_with_json, user, images)

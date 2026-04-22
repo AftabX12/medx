@@ -1,4 +1,4 @@
-"""VLM OCR via OpenRouter. Rasterizes PDFs per page and sends each as an image."""
+"""VLM OCR via Ollama local API. Requires a multimodal model (e.g. gemma4, llava)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import asyncio
 import io
 
 from app.ai.client import ImageInput, OpenRouterClient
-from app.ai.errors import RateLimitExhausted
 from app.ai.models import ModelRole
+from app.config import get_settings
+
 from app.ingestion.ocr.engine import OCRPage, OCRResult
 from app.logging import get_logger
 
@@ -24,7 +25,6 @@ _VISION_USER = (
 
 
 def _rasterize_pdf_sync(data: bytes, dpi: int) -> list[bytes]:
-    """PDF bytes -> list[PNG bytes] for every page. Runs in a thread."""
     from pdf2image import convert_from_bytes
 
     images = convert_from_bytes(data, dpi=dpi)
@@ -36,14 +36,17 @@ def _rasterize_pdf_sync(data: bytes, dpi: int) -> list[bytes]:
     return out
 
 
-class OpenRouterVisionEngine:
-    """OCR via OpenRouter VLM. Uses ai_model, independent of AI_PROVIDER."""
+class OllamaVisionEngine:
+    """OCR via Ollama local VLM. Uses ollama_model, independent of AI_PROVIDER."""
 
-    name = "openrouter"
+    name = "ollama_vision"
 
     def __init__(self) -> None:
-        # Dedicated client pinned to openrouter, regardless of the global AI_PROVIDER.
-        self._client = OpenRouterClient(force_provider="openrouter")
+        settings = get_settings()
+        # Use OLLAMA_VISION_MODEL if set; fall back to OLLAMA_MODEL.
+        vision_model = settings.ollama_vision_model or settings.ollama_model
+        # Dedicated client pinned to ollama with the vision model, regardless of AI_PROVIDER.
+        self._client = OpenRouterClient(force_provider="ollama", force_model=vision_model)
 
     def supports(self, mime: str) -> bool:
         return mime == "application/pdf" or mime.startswith("image/")
@@ -51,14 +54,14 @@ class OpenRouterVisionEngine:
     async def extract(self, data: bytes, mime: str) -> OCRResult:
         try:
             if mime == "application/pdf":
-                images = await asyncio.to_thread(_rasterize_pdf_sync, data, 200)
+                images = await asyncio.to_thread(_rasterize_pdf_sync, data, 150)
                 image_mime = "image/png"
             else:
                 images = [data]
                 image_mime = mime
 
-            pages: list[OCRPage] = []
-            for i, img_bytes in enumerate(images, start=1):
+            # Process pages in parallel for better performance
+            async def process_page(i: int, img_bytes: bytes) -> OCRPage:
                 resp = await self._client.complete_text(
                     role=ModelRole.VISION_OCR,
                     system=_VISION_SYSTEM,
@@ -67,7 +70,18 @@ class OpenRouterVisionEngine:
                     temperature=0.0,
                     max_tokens=4096,
                 )
-                pages.append(OCRPage(page_num=i, text=(resp.content or "").strip()))
+                return OCRPage(page_num=i, text=(resp.content or "").strip())
+
+            # Limit concurrency to avoid overwhelming the Ollama server
+            import asyncio
+            semaphore = asyncio.Semaphore(2)  # Process 2 pages at a time
+            
+            async def process_with_limit(i: int, img_bytes: bytes) -> OCRPage:
+                async with semaphore:
+                    return await process_page(i, img_bytes)
+            
+            tasks = [process_with_limit(i, img) for i, img in enumerate(images, start=1)]
+            pages = await asyncio.gather(*tasks)
 
             text = "\n\n".join(p.text for p in pages if p.text)
             return OCRResult(
@@ -76,13 +90,8 @@ class OpenRouterVisionEngine:
                 engine=self.name,
                 status="ok" if text else "no_text",
             )
-        except RateLimitExhausted as exc:
-            log.warning("vision_ocr_rate_limited", error=str(exc))
-            return OCRResult(
-                text="", engine=self.name, status="failed", error="rate_limited"
-            )
         except Exception as exc:  # noqa: BLE001
-            log.warning("vision_ocr_failed", error=str(exc))
+            log.warning("ollama_ocr_failed", error=str(exc))
             return OCRResult(
                 text="", engine=self.name, status="failed", error=str(exc)
             )

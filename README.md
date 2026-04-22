@@ -30,7 +30,7 @@ MedX is a lightweight, AI-powered EHR system for general medical use. It ingests
 
 ### Clinician Side
 - **Patient Registry** — demographics, problems, medications, allergies, observations, AI summary
-- **Document Ingestion** — PDF and image upload, OCR via pypdf / OpenRouter VLM / Marker
+- **Document Ingestion** — PDF and image upload, OCR via configurable engine (pypdf / OpenRouter / Ollama)
 - **AI Extraction Pipeline** — classify → extract → persist → reconcile → summarize (real-time status via SSE)
 - **Reconcile Flags** — auto-fill safe fields, flag identity/clinical conflicts with severity tiers
 - **Document Viewer** — original file + OCR text + structured extraction side-by-side
@@ -113,7 +113,7 @@ Browser EventSource → JS updates pipeline chips without page reload
 | Queue | In-process asyncio (→ arq/Redis in Phase 5) |
 | File storage | Local disk (→ S3 in Phase 5) |
 | AI provider | OpenRouter (cloud) or Ollama (local) |
-| OCR | pypdf (text-layer) + OpenRouter VLM + Marker (local) |
+| OCR | pypdf (text-layer) / OpenRouter VLM / Ollama VLM (configurable) |
 | Real-time | Server-Sent Events (sse-starlette) |
 
 ---
@@ -178,10 +178,10 @@ medx/
 │   ├── ingestion/
 │   │   ├── store.py             # DocumentStore abstraction (LocalDiskStore / S3)
 │   │   └── ocr/
-│   │       ├── pipeline.py      # OCR job: try pypdf → vision VLM → Marker
-│   │       ├── pypdf_engine.py  # Text-layer PDF extraction
-│   │       ├── openrouter_engine.py  # Vision LLM OCR
-│   │       └── marker_engine.py # Local Marker fallback
+│   │       ├── pipeline.py      # OCR dispatch — routes to engine set by OCR_ENGINE
+│   │       ├── pypdf_engine.py  # Text-layer PDF extraction (default)
+│   │       ├── openrouter_engine.py  # Vision OCR via OpenRouter cloud VLM
+│   │       └── ollama_engine.py # Vision OCR via local Ollama VLM
 │   │
 │   ├── queue/
 │   │   ├── asyncio_queue.py     # Bounded worker pool, job registry, startup recovery
@@ -218,7 +218,7 @@ medx/
 git clone <repo>
 cd medx
 cp .env.example .env
-# Edit .env — add your OPENROUTER_API_KEY at minimum
+# Edit .env — set AI_PROVIDER and the matching model settings (see Configuration below)
 docker compose up --build
 ```
 
@@ -266,7 +266,7 @@ docker compose up postgres -d
 
 ```bash
 cp .env.example .env
-# Edit .env — at minimum set OPENROUTER_API_KEY
+# Edit .env — set AI_PROVIDER and the matching model settings (see Configuration below)
 alembic upgrade head
 ```
 
@@ -274,28 +274,190 @@ alembic upgrade head
 
 ## Configuration
 
-All configuration is via environment variables (or a `.env` file). See `.env.example` for defaults.
+All configuration is via environment variables or a `.env` file. There are no hardcoded fallbacks — missing required variables cause the app to fail at startup with a clear error. See `.env.example` for the full template.
 
-| Variable | Default | Description |
+### Core Settings
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `APP_ENV` | No | `dev` | Application environment: `dev` or `prod` |
+| `APP_DEBUG` | No | `true` | Enable debug mode (verbose logging, detailed errors) |
+
+### Database
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | **Yes** | — | Async SQLAlchemy connection string. Examples:<br>• PostgreSQL: `postgresql+asyncpg://user:pass@host:5432/db`<br>• SQLite: `sqlite+aiosqlite:///./medx.db` |
+
+### Authentication & Security
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `JWT_SECRET` | **Yes** | — | Secret key for JWT token signing. Must be unique per deployment. Use a long random string (32+ chars). |
+| `JWT_ALGORITHM` | No | `HS256` | JWT signing algorithm |
+| `JWT_EXPIRE_MINUTES` | No | `60` | Session token lifetime in minutes |
+
+### Seed Admin Account
+
+These variables create the initial admin account on first startup. All are required.
+
+| Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://medx:medx@localhost:5433/medx` | Async SQLAlchemy URL |
-| `SECRET_KEY` | *(required)* | JWT signing key — change in production |
-| `JWT_EXPIRE_MINUTES` | `60` | Session token lifetime |
-| `AI_PROVIDER` | `openrouter` | `openrouter` or `ollama` |
-| `OPENROUTER_API_KEY` | — | Required when `AI_PROVIDER=openrouter` |
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama API base |
-| `OLLAMA_MODEL` | `gemma4:e4b` | Model used for all roles when Ollama |
-| `AI_MODEL_CLASSIFY` | `meta-llama/llama-3.3-70b-instruct:free` | Classification model |
-| `AI_MODEL_EXTRACT` | `nvidia/nemotron-super-120b-instruct:free` | Extraction model |
-| `AI_MODEL_VISION_OCR` | `nvidia/nemotron-nano-12b-vl:free` | Vision OCR model |
-| `AI_MODEL_SUMMARIZE` | `nvidia/nemotron-super-120b-instruct:free` | Summarization model |
-| `AI_MODEL_CHAT` | `nvidia/nemotron-super-120b-instruct:free` | Chat model |
-| `DOCUMENT_STORE` | `local` | `local` or `s3` |
-| `LOCAL_STORE_PATH` | `./document_store` | Root directory for local storage |
-| `OCR_ENGINE` | `openrouter_vision` | `pypdf`, `openrouter_vision`, or `marker` |
-| `OCR_MAX_PAGES` | `30` | Maximum PDF pages accepted |
-| `QUEUE_MAX_CONCURRENCY` | `2` | Parallel AI pipeline workers |
-| `APP_ENV` | `dev` | `dev` or `prod` (affects cookie security) |
+| `SEED_TENANT_NAME` | **Yes** | Tenant name for the auto-created admin (e.g., `MedX`) |
+| `SEED_ADMIN_EMAIL` | **Yes** | Admin email address |
+| `SEED_ADMIN_PASSWORD` | **Yes** | Admin password — **change before production deployment** |
+| `SEED_ADMIN_NAME` | **Yes** | Admin display name |
+
+### AI Provider Configuration
+
+MedX supports two AI providers: **OpenRouter** (cloud) and **Ollama** (local). Set `AI_PROVIDER` to choose which one to use for the extraction pipeline.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AI_PROVIDER` | No | `openrouter` | AI provider: `openrouter` (cloud LLM) or `ollama` (local LLM) |
+
+#### OpenRouter Settings
+
+Required when `AI_PROVIDER=openrouter` **or** `OCR_ENGINE=openrouter`.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | **Yes*** | — | API key from [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `OPENROUTER_MODEL` | **Yes*** | — | Model ID for all AI tasks. Examples:<br>• `deepseek/deepseek-chat-v3:free`<br>• `anthropic/claude-3.5-sonnet`<br>• `google/gemini-2.0-flash-exp:free` |
+| `OPENROUTER_BASE_URL` | No | `https://openrouter.ai/api/v1` | OpenRouter API base URL |
+| `OPENROUTER_APP_TITLE` | No | `MedX` | App identifier sent in API headers |
+| `OPENROUTER_TIMEOUT_S` | No | `90.0` | Request timeout in seconds |
+
+*Required only when using OpenRouter
+
+#### Ollama Settings
+
+Required when `AI_PROVIDER=ollama` **or** `OCR_ENGINE=ollama`.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OLLAMA_MODEL` | **Yes*** | — | Model name for all AI tasks. Examples:<br>• `llama3.2:latest`<br>• `gemma4:e4b`<br>• `qwen2.5:14b` |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434/v1` | Ollama API base URL (OpenAI-compatible endpoint) |
+| `OLLAMA_VISION_MODEL` | No | — | **Only used when `OCR_ENGINE=ollama`.** Separate multimodal model for vision OCR. If not set, falls back to `OLLAMA_MODEL`. Use this when you want a different model for OCR than for extraction. Examples:<br>• `llava:latest`<br>• `llava-phi3:latest`<br>• `minicpm-v:latest` |
+| `OLLAMA_TIMEOUT_S` | No | `120.0` | Request timeout in seconds |
+
+*Required only when using Ollama
+
+### OCR Engine Configuration
+
+Controls how documents are converted to text. Choose based on your document types and performance needs.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OCR_ENGINE` | No | `pypdf` | OCR engine selection:<br><br>• **`pypdf`** — Fast text-layer extraction. Works for digital PDFs with embedded text. No AI required. **Recommended for most use cases.**<br><br>• **`openrouter`** — Vision-based OCR using OpenRouter VLM. Handles scanned documents and images. Requires `OPENROUTER_API_KEY` and `OPENROUTER_MODEL`. Slower but works on any image/PDF.<br><br>• **`ollama`** — Vision-based OCR using local Ollama VLM. Requires `OLLAMA_MODEL` (or `OLLAMA_VISION_MODEL`). Use a multimodal model like `llava` or `minicpm-v`. |
+
+**Performance comparison:**
+- `pypdf`: ~1-2 seconds per document (fastest)
+- `ollama`: ~10-30 seconds per page (depends on model and hardware)
+- `openrouter`: ~5-15 seconds per page (depends on model and API latency)
+
+**When to use each:**
+- Use `pypdf` for modern digital PDFs (lab reports, discharge summaries, etc.)
+- Use `ollama` or `openrouter` for scanned documents, handwritten notes, or images
+
+### Document Storage
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DOCUMENT_STORE` | No | `local` | Storage backend: `local` (filesystem) or `s3` (AWS S3) |
+| `LOCAL_STORE_PATH` | No | `./uploads` | Directory path for local file storage (used when `DOCUMENT_STORE=local`) |
+
+### Background Queue
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `QUEUE_BACKEND` | No | `inprocess` | Queue backend: `inprocess` (asyncio-based, single worker) or `arq` (Redis-backed, planned for Phase 5) |
+| `QUEUE_MAX_CONCURRENCY` | No | `2` | Number of parallel AI pipeline workers. Higher values process more documents simultaneously but use more memory and API quota. |
+
+---
+
+### Configuration Examples
+
+#### Example 1: OpenRouter (Cloud) with PyPDF OCR
+
+```bash
+# Core
+APP_ENV=dev
+DATABASE_URL=postgresql+asyncpg://medx:medx@localhost:5432/medx
+
+# Auth
+JWT_SECRET=your-secret-key-here-make-it-long-and-random
+
+# Seed admin
+SEED_TENANT_NAME=MedX
+SEED_ADMIN_EMAIL=admin@medx.com
+SEED_ADMIN_PASSWORD=change-me-in-production
+SEED_ADMIN_NAME=Admin User
+
+# AI: OpenRouter
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+OPENROUTER_MODEL=deepseek/deepseek-chat-v3:free
+
+# OCR: Fast text extraction
+OCR_ENGINE=pypdf
+```
+
+#### Example 2: Ollama (Local) with Vision OCR
+
+```bash
+# Core
+APP_ENV=dev
+DATABASE_URL=sqlite+aiosqlite:///./medx.db
+
+# Auth
+JWT_SECRET=your-secret-key-here-make-it-long-and-random
+
+# Seed admin
+SEED_TENANT_NAME=MedX
+SEED_ADMIN_EMAIL=admin@medx.com
+SEED_ADMIN_PASSWORD=change-me-in-production
+SEED_ADMIN_NAME=Admin User
+
+# AI: Ollama
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://192.168.1.100:11434/v1
+OLLAMA_MODEL=llama3.2:latest
+OLLAMA_VISION_MODEL=llava:latest
+
+# OCR: Vision-based for scanned documents
+OCR_ENGINE=ollama
+```
+
+#### Example 3: Hybrid (OpenRouter AI + Ollama OCR)
+
+```bash
+# Core
+APP_ENV=prod
+DATABASE_URL=postgresql+asyncpg://medx:medx@db:5432/medx
+
+# Auth
+JWT_SECRET=production-secret-key-32-chars-minimum
+
+# Seed admin
+SEED_TENANT_NAME=MedX
+SEED_ADMIN_EMAIL=admin@medx.com
+SEED_ADMIN_PASSWORD=SecurePassword123!
+SEED_ADMIN_NAME=Admin User
+
+# AI: OpenRouter for extraction pipeline
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+
+# OCR: Local Ollama for vision OCR
+OCR_ENGINE=ollama
+OLLAMA_BASE_URL=http://ollama-server:11434/v1
+OLLAMA_VISION_MODEL=minicpm-v:latest
+
+# Performance
+QUEUE_MAX_CONCURRENCY=4
+```
 
 ---
 
@@ -333,6 +495,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ### Creating the First Admin Account
 
+The admin account is created automatically on first startup using the `SEED_*` variables from `.env`. All four (`SEED_TENANT_NAME`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_NAME`) are required — the app will not start without them.
+
+To create additional admin accounts via CLI:
+
 ```bash
 docker exec -it medx-app python -m scripts.create_admin
 ```
@@ -364,9 +530,10 @@ Upload
   │
   ▼
 [1] OCR  ─────────────────────────────────────────── Document.ocr_status
-  Try pypdf (text-layer PDF)
-  → fallback: OpenRouter vision VLM (scanned docs)
-  → fallback: local Marker
+  Engine set by OCR_ENGINE:
+    pypdf      — text-layer extraction (default, no AI)
+    openrouter — vision VLM via OpenRouter (OPENROUTER_MODEL)
+    ollama     — vision VLM via Ollama (OLLAMA_MODEL or OLLAMA_VISION_MODEL)
   │
   ▼
 [2] Classify ─────────────────────────────────────── pipeline_status.classify
@@ -540,12 +707,18 @@ Unknown document types are handled automatically by the dynamic fallback extract
 ### Adding a New LLM Role
 
 1. Add value to `ModelRole` in `app/ai/models.py`
-2. Add corresponding setting in `app/config.py`
-3. Set model ID in `.env`
+2. Call the agent with that role — it automatically uses `OPENROUTER_MODEL` (or `OLLAMA_MODEL` when `AI_PROVIDER=ollama`). No per-role config needed.
 
 ### Swapping AI Provider
 
-Change `AI_PROVIDER=ollama` in `.env` — no code changes needed. All model roles route to `OLLAMA_MODEL`.
+Change `AI_PROVIDER` in `.env` — no code changes needed.
+
+| `AI_PROVIDER` | Model used |
+|---|---|
+| `openrouter` | `OPENROUTER_MODEL` for all roles |
+| `ollama` | `OLLAMA_MODEL` for all roles |
+
+OCR is independent: set `OCR_ENGINE` separately (`pypdf` / `openrouter` / `ollama`).
 
 ### Re-extracting All Documents
 

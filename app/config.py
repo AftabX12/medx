@@ -8,17 +8,17 @@ Usage:
     settings = get_settings()   # cached singleton
 
 Key groups:
-    - Database: DATABASE_URL (Postgres — asyncpg driver required)
+    - Database: DATABASE_URL
     - Auth: JWT_SECRET, JWT_EXPIRE_MINUTES
-    - AI: AI_PROVIDER ("openrouter" | "ollama"), per-role model IDs
-    - OCR: OCR_ENGINE, OCR_MAX_PAGES
-    - Queue: QUEUE_MAX_CONCURRENCY (bounded asyncio worker pool)
-    - Storage: DOCUMENT_STORE ("local"), LOCAL_STORE_PATH
+    - AI: AI_PROVIDER ("openrouter" | "ollama"), OPENROUTER_MODEL / OLLAMA_MODEL
+    - OCR: OCR_ENGINE ("pypdf" | "openrouter" | "ollama")
+    - Queue: QUEUE_MAX_CONCURRENCY
+    - Storage: DOCUMENT_STORE, LOCAL_STORE_PATH
 """
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,10 +32,10 @@ class Settings(BaseSettings):
     app_debug: bool = True
 
     # ── Database ─────────────────────────────────────────────────────────────
-    database_url: str = "postgresql+asyncpg://medx:medx@localhost:5433/medx"
+    database_url: str
 
     # ── Auth / JWT ────────────────────────────────────────────────────────────
-    jwt_secret: str = Field(default="dev-secret-change-me")
+    jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
@@ -44,44 +44,49 @@ class Settings(BaseSettings):
     local_store_path: str = "./uploads"
 
     # ── AI provider ──────────────────────────────────────────────────────────
-    # "openrouter" uses cloud models; "ollama" routes all roles to ollama_model.
-    ai_provider: str = "openrouter"
+    ai_provider: str = "openrouter"     # "openrouter" | "ollama"
 
-    # OpenRouter (OpenAI-compatible API)
+    # OpenRouter — only needed when AI_PROVIDER=openrouter or OCR_ENGINE=openrouter
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_app_title: str = "MedX"
     openrouter_timeout_s: float = 90.0
+    openrouter_model: str = ""
 
-    # Ollama (OpenAI-compatible local API)
-    ollama_base_url: str = "http://192.168.2.17:11434/v1"
-    ollama_model: str = "gemma4:e4b"
+    # Ollama — only needed when AI_PROVIDER=ollama or OCR_ENGINE=ollama
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_model: str = ""
+    ollama_vision_model: str = ""      # vision model for OCR; falls back to ollama_model if empty
     ollama_timeout_s: float = 120.0
 
-    # Per-role model IDs — used only when ai_provider="openrouter".
-    # VISION_OCR always uses OpenRouter even when ai_provider="ollama" unless
-    # the Ollama model is multimodal (e.g. gemma4).
-    ai_model_classify: str = "google/gemini-2.0-flash-exp:free"
-    ai_model_extract: str = "deepseek/deepseek-chat-v3:free"
-    ai_model_extract_alt: str = "meta-llama/llama-3.3-70b-instruct:free"
-    ai_model_vision_ocr: str = "qwen/qwen2.5-vl-72b-instruct:free"
-    ai_model_summarize: str = "google/gemini-2.0-flash-exp:free"
-    ai_model_chat: str = "mistralai/mistral-small-3.1-24b-instruct:free"
-    ai_model_synthetic_gen: str = "deepseek/deepseek-chat-v3:free"
+    @model_validator(mode="after")
+    def _validate_provider_settings(self) -> "Settings":
+        needs_openrouter = self.ai_provider == "openrouter" or self.ocr_engine == "openrouter"
+        needs_ollama = self.ai_provider == "ollama" or self.ocr_engine == "ollama"
+        if needs_openrouter:
+            if not self.openrouter_api_key:
+                raise ValueError("OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter or OCR_ENGINE=openrouter")
+            if not self.openrouter_model:
+                raise ValueError("OPENROUTER_MODEL is required when AI_PROVIDER=openrouter or OCR_ENGINE=openrouter")
+        if needs_ollama and not self.ollama_model:
+            raise ValueError("OLLAMA_MODEL is required when AI_PROVIDER=ollama or OCR_ENGINE=ollama")
+        return self
 
     # ── OCR ───────────────────────────────────────────────────────────────────
-    ocr_engine: str = "openrouter_vision"   # "pypdf" | "openrouter_vision" | "marker"
-    ocr_max_pages: int = 30                 # PDFs with more pages are rejected at upload
+    # "pypdf"       — text-layer extraction (default, no AI)
+    # "openrouter"  — vision OCR via OpenRouter (uses openrouter_model)
+    # "ollama"      — vision OCR via Ollama (uses ollama_model / ollama_vision_model)
+    ocr_engine: str = "pypdf"
 
     # ── Background queue ─────────────────────────────────────────────────────
     queue_backend: str = "inprocess"        # "inprocess" | "arq" (Phase 5)
-    queue_max_concurrency: int = 2          # Parallel AI pipeline workers
+    queue_max_concurrency: int = 2
 
     # ── Seed admin (created on first startup if absent) ──────────────────────
-    seed_tenant_name: str = "MedX"
-    seed_admin_email: str = "admin@medx.com"
-    seed_admin_password: str = "admin123"
-    seed_admin_name: str = "Admin"
+    seed_tenant_name: str
+    seed_admin_email: str
+    seed_admin_password: str
+    seed_admin_name: str
 
 
 @lru_cache

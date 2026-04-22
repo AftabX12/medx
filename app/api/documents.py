@@ -11,6 +11,7 @@ from app.deps import CurrentUser, SessionDep
 from app.ingestion.store import get_document_store
 from app.queue import get_queue
 from app.schemas.document import DocumentResponse
+from app.validation.upload import MAX_BYTES as _MAX_BYTES
 
 router = APIRouter(tags=["documents"])
 
@@ -20,7 +21,6 @@ _ALLOWED_MIME = {
     "image/jpeg": "image",
     "image/jpg": "image",
 }
-_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
 
 @router.post(

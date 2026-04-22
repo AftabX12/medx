@@ -1,11 +1,12 @@
 """OCR pipeline orchestration. Persists ocr_status/ocr_text on the Document row.
 
 Flow:
-  1. PDF → try pypdf first; non-empty text wins (cheap, zero-call path).
-  2. Otherwise (PDF with no text layer OR image): dispatch to the configured
-     engine (openrouter_vision by default; marker for local fallback).
-  3. On RateLimitExhausted from the vision engine, fall back to Marker if
-     installed; else mark failed with error=rate_limited.
+  1. Dispatch to the configured OCR engine based on OCR_ENGINE setting:
+       pypdf       — text-layer extraction, no AI (default)
+       openrouter  — vision OCR via OpenRouter cloud VLM
+       ollama      — vision OCR via local Ollama VLM
+  2. The engine returns an OCRResult; status is stored on the Document row.
+  3. On success, chains to the extraction queue.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from app.db.models import Document
 from app.db.session import SessionLocal
 from app.events import get_event_bus
 from app.ingestion.ocr.engine import OCREngine, OCRResult
-from app.ingestion.ocr.openrouter_engine import OpenRouterVisionEngine
 from app.ingestion.ocr.pypdf_engine import PyPDFEngine
 from app.ingestion.store import get_document_store
 from app.logging import get_logger
@@ -29,48 +29,24 @@ log = get_logger(__name__)
 
 def _resolve_engine(name: str) -> OCREngine:
     """Instantiate the named OCR engine; raises ValueError for unknown names."""
-    if name == "openrouter_vision":
+    if name == "pypdf":
+        return PyPDFEngine()
+    if name == "openrouter":
+        from app.ingestion.ocr.openrouter_engine import OpenRouterVisionEngine
         return OpenRouterVisionEngine()
-    if name == "marker":
-        from app.ingestion.ocr.marker_engine import MarkerEngine
-
-        return MarkerEngine()
-    raise ValueError(f"unknown ocr_engine: {name}")
+    if name == "ollama":
+        from app.ingestion.ocr.ollama_engine import OllamaVisionEngine
+        return OllamaVisionEngine()
+    raise ValueError(f"unknown ocr_engine '{name}' — valid values: pypdf, openrouter, ollama")
 
 
 async def _ocr_bytes(data: bytes, mime: str) -> OCRResult:
-    """Run OCR on raw file bytes, trying pypdf first for PDFs.
-
-    Falls back from vision engine to local Marker if rate-limited.
-    Returns an OCRResult with status "ok", "failed", "no_text", or "unsupported".
-    """
+    """Run OCR on raw file bytes using the configured OCR engine."""
     settings = get_settings()
-
-    if mime == "application/pdf":
-        pypdf_res = await PyPDFEngine().extract(data, mime)
-        if pypdf_res.status == "ok" and pypdf_res.text:
-            return pypdf_res
-
     engine = _resolve_engine(settings.ocr_engine)
     if not engine.supports(mime):
         return OCRResult(text="", engine=engine.name, status="unsupported")
-
-    result = await engine.extract(data, mime)
-
-    if (
-        result.status == "failed"
-        and result.error == "rate_limited"
-        and settings.ocr_engine != "marker"
-    ):
-        try:
-            from app.ingestion.ocr.marker_engine import MarkerEngine
-
-            log.info("vision_fallback_to_marker")
-            result = await MarkerEngine().extract(data, mime)
-        except ImportError:
-            log.warning("marker_not_installed_no_fallback")
-
-    return result
+    return await engine.extract(data, mime)
 
 
 async def process_document(document_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
