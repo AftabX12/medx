@@ -1,3 +1,4 @@
+from app.db.models.agent_run_log import AgentRunLog
 from app.db.models.audit import AuditLog
 from app.db.models.clinical import Allergy, Encounter, Medication, Observation, Problem
 from app.db.models.document import Document, Extraction
@@ -10,6 +11,7 @@ from app.db.models.tenant import Tenant, User
 
 __all__ = [
     "Allergy",
+    "AgentRunLog",
     "Appointment",
     "AuditLog",
     "Document",

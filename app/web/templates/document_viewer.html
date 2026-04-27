@@ -50,10 +50,13 @@
   <div id="pipeline-steps" class="flex items-center gap-2 flex-wrap">
     {% set steps = [
       ("ocr",       "OCR"),
+      ("document_intelligence", "Understand"),
       ("classify",  "Classify"),
       ("extract",   "Extract"),
       ("persist",   "Persist"),
       ("profile",   "Profile"),
+      ("flag_review", "Review"),
+      ("apply_decisions", "Apply"),
       ("summarize", "Summarize"),
     ] %}
     {% for key, label in steps %}
@@ -76,6 +79,62 @@
     {% endfor %}
   </div>
 </div>
+
+{% if pending_flags %}
+<form method="post" action="/documents/ui/{{ document.id }}/flags/review"
+      hx-post="/documents/ui/{{ document.id }}/flags/review"
+      hx-target="body"
+      class="mb-4 bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-2xl p-4">
+  <div class="flex items-start justify-between gap-3 mb-3">
+    <div>
+      <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">Flag Review</p>
+      <p class="text-xs text-slate-500 dark:text-gray-400 mt-0.5">{{ pending_flags | length }} item{{ 's' if pending_flags | length != 1 }} need a clinician decision before summarization continues.</p>
+    </div>
+    <button type="submit" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">Submit Decisions</button>
+  </div>
+  <div class="space-y-2">
+    {% for flag in pending_flags %}
+    {% set field_name = flag.details.field or 'item' %}
+    <div class="border border-slate-200 dark:border-gray-800 rounded-xl p-3 text-xs">
+      <div class="flex items-center gap-2 flex-wrap mb-2">
+        <span class="font-semibold text-slate-800 dark:text-gray-200">{{ field_name | replace('_', ' ') | title }}</span>
+        <span class="px-1.5 py-0.5 rounded-md
+          {% if flag.severity == 'critical' %}bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300
+          {% elif flag.severity == 'warning' %}bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300
+          {% else %}bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300{% endif %}">
+          {{ flag.severity }}
+        </span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="rounded-lg bg-slate-50 dark:bg-gray-800 p-2">
+          <p class="text-slate-400 dark:text-gray-500 mb-1">Current</p>
+          <p class="font-mono text-slate-800 dark:text-gray-200 break-words">{{ flag.details.existing_value or flag.details.existing or 'Empty' }}</p>
+        </div>
+        <div class="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-2">
+          <p class="text-emerald-600 dark:text-emerald-400 mb-1">New Value</p>
+          <p class="font-mono text-emerald-800 dark:text-emerald-200 break-words">{{ flag.details.document_value or flag.details.new or 'Empty' }}</p>
+        </div>
+      </div>
+      {% if flag.agent_reasoning %}
+      <p class="text-slate-500 dark:text-gray-400 mb-2">{{ flag.agent_reasoning }}</p>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex items-center gap-1.5 text-slate-600 dark:text-gray-300">
+          <input type="radio" name="choice_{{ flag.id }}" value="keep_existing" checked>
+          Keep Existing
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-slate-600 dark:text-gray-300">
+          <input type="radio" name="choice_{{ flag.id }}" value="use_new">
+          Use New Value
+        </label>
+        <textarea name="note_{{ flag.id }}" rows="1" placeholder="Optional note"
+                  class="min-w-64 flex-1 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-950 px-2 py-1 text-xs text-slate-700 dark:text-gray-200"></textarea>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</form>
+{% endif %}
 
 <div class="grid grid-cols-2 gap-4" style="height:calc(100vh - 17rem)">
   <!-- Original file preview -->

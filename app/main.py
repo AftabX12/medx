@@ -70,20 +70,28 @@ def _login_redirect_for(path: str) -> RedirectResponse:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan: start the worker queue on startup, drain it on shutdown.
-
-    The queue re-enqueues any documents stuck in ocr_status='pending' from a
-    previous run, so no work is silently lost across restarts.
-    """
+    """FastAPI lifespan: start the worker queue on startup, drain it on shutdown."""
     configure_logging()
     settings = get_settings()
     await _seed_admin()
+
+    from app.ai.dspy_config import configure_dspy
+    from app.agents.checkpointer import setup_checkpointer
+    from app.optimization.compiled_agents import load_compiled_agents
+
+    configure_dspy()
+    load_compiled_agents()
+    await setup_checkpointer()
+
     queue = get_queue()
     await queue.start(concurrency=settings.queue_max_concurrency)
     try:
         yield
     finally:
         await queue.stop()
+        from app.agents.checkpointer import close_checkpointer
+
+        await close_checkpointer()
 
 
 def create_app() -> FastAPI:

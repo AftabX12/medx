@@ -15,15 +15,18 @@ cookie and returns None when absent. Routes that require auth redirect to the
 appropriate login page rather than returning 401/403.
 """
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, File, Form, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
+from langgraph.types import Command
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.agents.graph import get_compiled_graph
 from app.config import get_settings
-from app.db.models import Document, Patient, User
+from app.db.models import Document, Patient, ReconcileFlag, User
 from app.db.repositories.audit import AuditRepository
 from app.db.repositories.dashboard import DashboardRepository
 from app.db.repositories.document import DocumentRepository
@@ -36,17 +39,17 @@ from app.db.repositories.reconcile import ReconcileFlagRepository
 from app.db.repositories.tenant import TenantRepository
 from app.db.repositories.user import UserRepository
 from app.deps import SESSION_COOKIE, AdminUser, OptionalUser, SessionDep, get_optional_user
+from app.events import get_event_bus
 from app.ingestion.store import get_document_store
+from app.logging import get_logger
 from app.queue import get_queue
 from app.schemas.auth import LoginRequest, RegisterRequest
 from app.schemas.patient import PatientCreate
-from app.events import get_event_bus
-from app.logging import get_logger
-
-log = get_logger(__name__)
 from app.security import create_access_token, hash_password, verify_password
 from app.validation import UploadRejected, validate_upload
 from app.web.templates import templates
+
+log = get_logger(__name__)
 
 router = APIRouter(tags=["web"])
 
@@ -663,9 +666,13 @@ async def resolve_flag(
                             pass
                     setattr(patient, field, doc_val)
             flag.resolved_by = "doctor_apply"
+            flag.resolution_choice = "use_new"
         else:
             flag.resolved_by = "doctor_dismiss"
+            flag.resolution_choice = "keep_existing"
         flag.resolved = True
+        flag.resolution_note = str(form.get("note", "") or "").strip() or None
+        flag.resolved_at = datetime.now(UTC)
         await session.commit()
 
     return RedirectResponse(f"/patients/ui/{patient_id}", status_code=status.HTTP_303_SEE_OTHER)
@@ -721,18 +728,78 @@ async def document_viewer(  # noqa: D401
     if not doc:
         return RedirectResponse("/patients/ui", status_code=status.HTTP_303_SEE_OTHER)
     extractions = await ExtractionRepository(session, user.tenant_id).list_for_document(document_id)
+    pending_flags = (
+        await session.execute(
+            select(ReconcileFlag)
+            .where(
+                ReconcileFlag.tenant_id == user.tenant_id,
+                ReconcileFlag.document_id == document_id,
+                ReconcileFlag.resolved.is_(False),
+            )
+            .order_by(ReconcileFlag.created_at.desc())
+        )
+    ).scalars().all()
     ps = doc.pipeline_status or {}
     pipeline_active = (
         doc.ocr_status == "pending"
         or any(s.get("status") == "running" for s in ps.values())
+        or ps.get("flag_review", {}).get("status") == "pending"
         or (doc.ocr_status == "ok" and ps.get("summarize", {}).get("status") != "ok")
     )
     return _render(
         request, user, "document_viewer.html",
         document=doc,
         extractions=extractions,
+        pending_flags=pending_flags,
         pipeline_active=pipeline_active,
     )
+
+
+@router.post("/documents/ui/{document_id}/flags/review")
+async def document_flags_review_post(
+    request: Request,
+    session: SessionDep,
+    document_id: uuid.UUID,
+):
+    user = await get_optional_user(request, session)
+    if not user:
+        return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    doc = await DocumentRepository(session, user.tenant_id).get(document_id)
+    if not doc:
+        return RedirectResponse("/patients/ui", status_code=status.HTTP_303_SEE_OTHER)
+
+    form = await request.form()
+    flags = (
+        await session.execute(
+            select(ReconcileFlag)
+            .where(
+                ReconcileFlag.tenant_id == user.tenant_id,
+                ReconcileFlag.document_id == document_id,
+                ReconcileFlag.resolved.is_(False),
+            )
+            .order_by(ReconcileFlag.created_at.asc())
+        )
+    ).scalars().all()
+    decisions = []
+    for flag in flags:
+        choice = str(form.get(f"choice_{flag.id}", "keep_existing"))
+        if choice not in {"keep_existing", "use_new"}:
+            choice = "keep_existing"
+        note = str(form.get(f"note_{flag.id}", "") or "").strip() or None
+        flag.resolution_choice = choice
+        flag.resolution_note = note
+        flag.resolved = True
+        flag.resolved_at = datetime.now(UTC)
+        flag.resolved_by = str(user.id)
+        decisions.append({"flag_id": str(flag.id), "choice": choice, "note": note})
+    await session.commit()
+
+    graph = get_compiled_graph()
+    config = {"configurable": {"thread_id": str(document_id)}}
+    await graph.ainvoke(Command(resume=decisions), config)
+
+    return RedirectResponse(f"/documents/ui/{document_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/documents/ui/{document_id}/reprocess")
@@ -872,7 +939,17 @@ async def document_pipeline_events(
             if current:
                 ps = current.pipeline_status or {}
                 ocr_st = current.ocr_status
-                step_order = ["ocr", "classify", "extract", "persist", "profile", "summarize"]
+                step_order = [
+                    "ocr",
+                    "document_intelligence",
+                    "classify",
+                    "extract",
+                    "persist",
+                    "profile",
+                    "flag_review",
+                    "apply_decisions",
+                    "summarize",
+                ]
                 for key in step_order:
                     if key == "ocr":
                         if ocr_st in ("ok", "failed"):
@@ -893,6 +970,7 @@ async def document_pipeline_events(
                 # extraction was never triggered (no classify key at all, not running).
                 extraction_never_started = (
                     ocr_st == "ok"
+                    and "document_intelligence" not in ps
                     and "classify" not in ps
                     and not any_running
                 )
@@ -959,7 +1037,16 @@ async def document_pipeline_events(
                         known["ocr"] = ocr_st
                         yield {"data": _json.dumps({"type": "step", "step": "ocr", "status": ocr_st, "detail": focr})}
                     # Other steps
-                    for key in ["classify", "extract", "persist", "profile", "summarize"]:
+                    for key in [
+                        "document_intelligence",
+                        "classify",
+                        "extract",
+                        "persist",
+                        "profile",
+                        "flag_review",
+                        "apply_decisions",
+                        "summarize",
+                    ]:
                         if key in fps:
                             st = fps[key].get("status", "pending")
                             if known.get(key) != st:

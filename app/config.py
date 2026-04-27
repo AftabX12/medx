@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     # "openrouter"  — vision OCR via OpenRouter (uses openrouter_model)
     # "ollama"      — vision OCR via Ollama (uses ollama_model / ollama_vision_model)
     ocr_engine: str = "pypdf"
+    ocr_max_pages: int = 200
+
+    # ── Anthropic / DSPy ─────────────────────────────────────────────────────
+    anthropic_api_key: str = ""             # enables Claude as primary LLM for agents
+    dspy_cache_dir: str = ".dspy_cache"     # local cache for DSPy LM calls
 
     # ── Background queue ─────────────────────────────────────────────────────
     queue_backend: str = "inprocess"        # "inprocess" | "arq" (Phase 5)

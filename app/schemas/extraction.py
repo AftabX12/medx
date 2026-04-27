@@ -26,7 +26,14 @@ class ReconcileFlagResponse(BaseModel):
     kind: str
     resource_type: str
     existing_id: uuid.UUID | None
-    new_extraction_id: uuid.UUID
+    new_extraction_id: uuid.UUID | None
     details: dict[str, Any]
+    severity: str
+    tier: int
+    agent_reasoning: str
+    resolution_options: list[str]
+    resolution_choice: str | None
+    resolution_note: str | None
     resolved: bool
+    resolved_at: datetime | None
     created_at: datetime

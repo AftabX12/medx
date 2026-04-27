@@ -8,7 +8,7 @@ used in `queue.enqueue("job_name", ...)` calls throughout the codebase.
 
 Current jobs:
     ocr_process      — OCR a newly uploaded document (text extraction)
-    extract_document — Full AI pipeline: classify → extract → persist → summarize
+    extract_document — Full agentic pipeline: understand → steward → summarize
 """
 
 from __future__ import annotations
@@ -34,20 +34,34 @@ async def ocr_process(*, document_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
 
 
 async def extract_document(*, document_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
-    """Run the full AI extraction pipeline for a document that has completed OCR.
+    """Run the full AI pipeline via the LangGraph graph.
 
-    Delegates to run_extraction in app.ai.agents.router, which runs:
-    classify → extract → persist → profile reconcile → summarize.
-
-    The ImportError guard allows the queue to start even in environments where
-    the AI dependencies are not installed (e.g. lightweight CI).
+    Routes through: document_intelligence → data_steward → clinical_summary.
+    State is checkpointed so the graph can resume on server restart.
     """
-    try:
-        from app.ai.agents.router import run_extraction
+    from app.agents.graph import get_compiled_graph
+    from app.agents.state import PipelineState
+    from app.db.models import Document
+    from app.db.session import SessionLocal
 
-        await run_extraction(document_id, tenant_id)
-    except ImportError:
-        log.info("extract_stub_skipped", document_id=str(document_id))
+    async with SessionLocal() as session:
+        doc = await session.get(Document, document_id)
+        if doc is None or doc.tenant_id != tenant_id:
+            log.warning("extract_document_skipped", document_id=str(document_id), reason="not found or tenant mismatch")
+            return
+        ocr_text = doc.ocr_text or ""
+        patient_id = str(doc.patient_id)
+
+    initial_state: PipelineState = {
+        "document_id": str(document_id),
+        "patient_id": patient_id,
+        "tenant_id": str(tenant_id),
+        "ocr_text": ocr_text,
+        "events": [],
+    }
+    config = {"configurable": {"thread_id": str(document_id)}}
+    graph = get_compiled_graph()
+    await graph.ainvoke(initial_state, config)
 
 
 def register_all(queue) -> None:

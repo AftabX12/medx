@@ -621,50 +621,17 @@ async def portal_chat(body: _ChatRequest, session: SessionDep, user: PatientUser
     Context is scoped strictly to the authenticated patient — no cross-patient data is ever
     passed to the LLM. Gracefully degrades if the AI provider is rate-limited.
     """
-    from app.ai.agents.chat import chat_answer
-    from app.ai.errors import RateLimitExhausted
-    from app.db.models import Allergy
-
-    patient_id = user.patient_id
-    patient = await session.get(Patient, patient_id)
-
-    problems = (
-        await session.execute(select(Problem).where(Problem.patient_id == patient_id))
-    ).scalars().all()
-    meds = (
-        await session.execute(select(Medication).where(Medication.patient_id == patient_id))
-    ).scalars().all()
-    obs = (
-        await session.execute(
-            select(Observation).where(Observation.patient_id == patient_id).limit(50)
-        )
-    ).scalars().all()
-    allergies = (
-        await session.execute(select(Allergy).where(Allergy.patient_id == patient_id))
-    ).scalars().all()
-    appts = (
-        await session.execute(
-            select(Appointment)
-            .where(Appointment.patient_id == patient_id, Appointment.scheduled_at >= datetime.now(timezone.utc))
-            .order_by(Appointment.scheduled_at)
-            .limit(5)
-        )
-    ).scalars().all()
-
-    context = {
-        "patient_name": f"{patient.given_name} {patient.family_name}" if patient else "you",
-        "ai_summary": patient.ai_summary if patient else None,
-        "problems": [{"label": p.label, "status": p.status} for p in problems],
-        "medications": [{"name": m.name, "dose": m.dose, "frequency": m.frequency, "status": m.status} for m in meds],
-        "observations": [{"label": o.label, "value": str(o.value_numeric or o.value_text), "unit": o.unit} for o in obs],
-        "allergies": [{"substance": a.substance, "reaction": a.reaction, "severity": a.severity} for a in allergies],
-        "upcoming_appointments": [{"date": a.scheduled_at.isoformat(), "reason": a.reason, "status": a.status} for a in appts],
-    }
+    del session
+    from app.agents.chat.agent import ChatAgent
+    from app.agents.registry import get_agent
 
     try:
-        answer = await chat_answer(body.question, context)
-    except RateLimitExhausted:
-        answer = "The AI provider is rate-limited right now. Please try again in a moment."
+        agent = get_agent("chat") or ChatAgent()
+        answer = await agent.forward(
+            question=body.question,
+            patient_id=str(user.patient_id),
+            tenant_id=str(user.tenant_id),
+        )
     except Exception:
         answer = "An error occurred. Please try again."
     return _ChatResponse(answer=answer)

@@ -1,10 +1,15 @@
 """Document REST API — upload, retrieval, SSE pipeline events, and OCR text."""
 import uuid
+from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
+from langgraph.types import Command
+from pydantic import BaseModel
+from sqlalchemy import select
 
-from app.db.models import Document
+from app.db.models import Document, ReconcileFlag
 from app.db.repositories.document import DocumentRepository
 from app.db.repositories.patient import PatientRepository
 from app.deps import CurrentUser, SessionDep
@@ -14,6 +19,11 @@ from app.schemas.document import DocumentResponse
 from app.validation.upload import MAX_BYTES as _MAX_BYTES
 
 router = APIRouter(tags=["documents"])
+
+
+class FlagResolutionRequest(BaseModel):
+    choice: Literal["keep_existing", "use_new"]
+    note: str | None = None
 
 _ALLOWED_MIME = {
     "application/pdf": "pdf",
@@ -123,6 +133,94 @@ async def document_text(
     return doc.ocr_text or ""
 
 
+@router.get("/api/documents/{document_id}/flags")
+async def list_document_flags(
+    document_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+) -> list[dict]:
+    doc = await DocumentRepository(session, user.tenant_id).get(document_id)
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    rows = (
+        await session.execute(
+            select(ReconcileFlag)
+            .where(
+                ReconcileFlag.tenant_id == user.tenant_id,
+                ReconcileFlag.document_id == document_id,
+                ReconcileFlag.resolved.is_(False),
+            )
+            .order_by(ReconcileFlag.created_at.desc())
+        )
+    ).scalars().all()
+    return [_flag_payload(row) for row in rows]
+
+
+@router.post("/api/flags/{flag_id}/resolve")
+async def resolve_reconcile_flag(
+    flag_id: uuid.UUID,
+    body: FlagResolutionRequest,
+    session: SessionDep,
+    user: CurrentUser,
+) -> dict:
+    flag = await session.get(ReconcileFlag, flag_id)
+    if not flag or flag.tenant_id != user.tenant_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="flag not found")
+
+    flag.resolution_choice = body.choice
+    flag.resolution_note = body.note
+    flag.resolved = True
+    flag.resolved_at = datetime.now(UTC)
+    flag.resolved_by = str(user.id)
+    await session.commit()
+    await session.refresh(flag)
+    return _flag_payload(flag)
+
+
+@router.post("/api/documents/{document_id}/resume")
+async def resume_document_pipeline(
+    document_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+) -> dict:
+    doc = await DocumentRepository(session, user.tenant_id).get(document_id)
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+
+    flags = (
+        await session.execute(
+            select(ReconcileFlag)
+            .where(
+                ReconcileFlag.tenant_id == user.tenant_id,
+                ReconcileFlag.document_id == document_id,
+            )
+            .order_by(ReconcileFlag.created_at.asc())
+        )
+    ).scalars().all()
+    unresolved = [flag for flag in flags if not flag.resolved]
+    if unresolved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail=f"{len(unresolved)} flag(s) still unresolved",
+        )
+
+    decisions = [
+        {
+            "flag_id": str(flag.id),
+            "choice": flag.resolution_choice or "keep_existing",
+            "note": flag.resolution_note,
+        }
+        for flag in flags
+    ]
+
+    from app.agents.graph import get_compiled_graph
+
+    graph = get_compiled_graph()
+    config = {"configurable": {"thread_id": str(document_id)}}
+    await graph.ainvoke(Command(resume=decisions), config)
+    return {"status": "resumed", "decisions": len(decisions)}
+
+
 @router.get("/documents/{document_id}/raw")
 async def download_document(
     document_id: uuid.UUID,
@@ -138,3 +236,24 @@ async def download_document(
     if doc.original_filename:
         headers["Content-Disposition"] = f'inline; filename="{doc.original_filename}"'
     return StreamingResponse(fh, media_type=doc.mime_type or "application/octet-stream", headers=headers)
+
+
+def _flag_payload(flag: ReconcileFlag) -> dict:
+    return {
+        "id": str(flag.id),
+        "patient_id": str(flag.patient_id),
+        "document_id": str(flag.document_id),
+        "kind": flag.kind,
+        "resource_type": flag.resource_type,
+        "field": flag.details.get("field"),
+        "current_value": flag.details.get("existing_value") or flag.details.get("existing"),
+        "new_value": flag.details.get("document_value") or flag.details.get("new"),
+        "details": flag.details,
+        "severity": flag.severity,
+        "agent_reasoning": flag.agent_reasoning,
+        "resolution_options": flag.resolution_options,
+        "resolution_choice": flag.resolution_choice,
+        "resolution_note": flag.resolution_note,
+        "resolved": flag.resolved,
+        "resolved_at": flag.resolved_at.isoformat() if flag.resolved_at else None,
+    }
